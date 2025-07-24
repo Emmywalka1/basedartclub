@@ -5,16 +5,21 @@
   "main": "index.js",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build", 
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
     "@farcaster/frame-sdk": "^0.0.5",
+    "@farcaster/frame-wagmi-connector": "^0.3.0",
     "next": "^14.0.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
-    "framer-motion": "^10.16.0"
+    "framer-motion": "^10.16.0",
+    "wagmi": "^2.0.0", 
+    "viem": "^2.0.0",
+    "@tanstack/react-query": "^5.0.0",
+    "axios": "^1.6.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
@@ -30,7 +35,9 @@
     "art",
     "base",
     "nft",
-    "swipe"
+    "swipe",
+    "wagmi",
+    "ethereum"
   ],
   "author": "Base Art Club",
   "license": "MIT"
