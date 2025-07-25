@@ -481,10 +481,7 @@ export default function Home() {
               drag
               dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
               onPanEnd={handlePanEnd}
-              whileDrag={{
-                scale: 1.05,
-                rotate: (info: any) => info.offset.x / 10,
-              }}
+              whileDrag={{ scale: 1.05 }}
             >
               {currentArtwork.isForSale && (
                 <div className="collection-status for-sale">For Sale</div>
