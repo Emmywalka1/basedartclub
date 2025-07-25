@@ -22,6 +22,7 @@ body {
   background: #ffffff;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
 }
 
 .header {
@@ -42,6 +43,35 @@ body {
 .header p {
   font-size: 14px;
   opacity: 0.9;
+}
+
+.wallet-status {
+  margin-top: 10px;
+  font-size: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.wallet-button {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.wallet-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.wallet-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .stats {
@@ -81,13 +111,14 @@ body {
   position: absolute;
   width: 100%;
   max-width: 320px;
-  height: 500px;
+  height: 520px;
   background: white;
   border-radius: 20px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
   overflow: hidden;
   cursor: grab;
   user-select: none;
+  transition: transform 0.2s ease;
 }
 
 .card:active {
@@ -96,13 +127,18 @@ body {
 
 .card-image {
   width: 100%;
-  height: 300px;
+  height: 280px;
   object-fit: cover;
   background: #f0f0f0;
+  border-bottom: 1px solid #eee;
 }
 
 .card-content {
   padding: 20px;
+  height: 240px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .card-title {
@@ -110,12 +146,19 @@ body {
   font-weight: 700;
   margin-bottom: 8px;
   color: #1a1a1a;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .card-artist {
   font-size: 16px;
   color: #666;
   margin-bottom: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .card-price {
@@ -123,12 +166,34 @@ body {
   font-weight: 600;
   color: #0052FF;
   margin-bottom: 8px;
+  padding: 6px 12px;
+  background: rgba(0, 82, 255, 0.1);
+  border-radius: 12px;
+  display: inline-block;
+  width: fit-content;
 }
 
 .card-description {
   font-size: 14px;
   color: #666;
   line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  flex: 1;
+}
+
+.card-metadata {
+  font-size: 11px;
+  color: #999;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #eee;
+}
+
+.card-metadata div {
+  margin-bottom: 2px;
 }
 
 .controls {
@@ -137,6 +202,7 @@ body {
   gap: 30px;
   padding: 30px 20px;
   background: white;
+  border-top: 1px solid #eee;
 }
 
 .control-button {
@@ -149,16 +215,23 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.2s ease;
+  transition: all 0.2s ease;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  position: relative;
 }
 
-.control-button:hover {
+.control-button:hover:not(:disabled) {
   transform: scale(1.1);
 }
 
-.control-button:active {
+.control-button:active:not(:disabled) {
   transform: scale(0.95);
+}
+
+.control-button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .pass-button {
@@ -177,6 +250,10 @@ body {
   width: 70px;
   height: 70px;
   font-size: 20px;
+}
+
+.collect-button:disabled {
+  background: #ccc;
 }
 
 .swipe-indicator {
@@ -224,6 +301,7 @@ body {
 
 .empty-stack p {
   margin-bottom: 20px;
+  line-height: 1.5;
 }
 
 .reload-button {
@@ -249,8 +327,73 @@ body {
   height: 100vh;
   font-size: 18px;
   color: #666;
+  text-align: center;
+  padding: 20px;
 }
 
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  padding: 20px;
+  text-align: center;
+}
+
+.error-state h3 {
+  color: #ff4458;
+  margin-bottom: 10px;
+}
+
+.error-state p {
+  color: #666;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+/* Loading animation */
+.loading::after {
+  content: '';
+  width: 20px;
+  height: 20px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #0052FF;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-left: 10px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Collection status indicator */
+.collection-status {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 82, 255, 0.1);
+  color: #0052FF;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  z-index: 10;
+}
+
+.collection-status.for-sale {
+  background: rgba(66, 199, 103, 0.1);
+  color: #42c767;
+}
+
+.collection-status.sold {
+  background: rgba(255, 68, 88, 0.1);
+  color: #ff4458;
+}
+
+/* Mobile responsive adjustments */
 @media (max-width: 480px) {
   .app-container {
     max-width: 100vw;
@@ -259,10 +402,74 @@ body {
   
   .card {
     max-width: calc(100vw - 40px);
-    height: 450px;
+    height: 480px;
   }
   
   .card-image {
-    height: 250px;
+    height: 240px;
+  }
+  
+  .card-content {
+    height: 240px;
+    padding: 16px;
+  }
+  
+  .header {
+    padding: 16px;
+  }
+  
+  .header h1 {
+    font-size: 20px;
+  }
+  
+  .controls {
+    padding: 20px;
+    gap: 20px;
+  }
+  
+  .control-button {
+    width: 50px;
+    height: 50px;
+    font-size: 20px;
+  }
+  
+  .collect-button {
+    width: 60px;
+    height: 60px;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .card {
+    background: #1a1a1a;
+    color: white;
+  }
+  
+  .card-title {
+    color: white;
+  }
+  
+  .card-artist {
+    color: #aaa;
+  }
+  
+  .card-description {
+    color: #ccc;
+  }
+  
+  .card-metadata {
+    color: #888;
+    border-top-color: #333;
+  }
+  
+  .stats {
+    background: #2a2a2a;
+    border-bottom-color: #333;
+  }
+  
+  .controls {
+    background: #1a1a1a;
+    border-top-color: #333;
   }
 }
