@@ -45,6 +45,7 @@ interface CollectibleNFT extends BaseNFT {
     currency: string;
   };
   marketplace?: string;
+  category?: string;
 }
 
 interface SwipeStats {
@@ -52,6 +53,21 @@ interface SwipeStats {
   passed: number;
   collected: number;
 }
+
+const CATEGORIES = [
+  'Photography',
+  'Editions', 
+  'One-of-Ones',
+  'AI Art',
+  'Digital',
+];
+
+const PRICE_RANGES = [
+  'Freemint',
+  'Under 0.1 ETH',
+  'Under 1 ETH',
+  'Over 1 ETH'
+];
 
 export default function Home() {
   const [artworks, setArtworks] = useState<CollectibleNFT[]>([]);
@@ -62,6 +78,8 @@ export default function Home() {
   const [isCollecting, setIsCollecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [walletConnected, setWalletConnected] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [userPoints, setUserPoints] = useState(0);
   
   const controls = useAnimation();
 
@@ -104,6 +122,7 @@ export default function Home() {
               currency: 'ETH',
             },
             marketplace: 'OpenSea',
+            category: CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)],
           }));
           
           setArtworks(collectibleNFTs);
@@ -114,13 +133,13 @@ export default function Home() {
         console.log('API not available, using mock data');
       }
 
-      // Fallback to mock data
+      // Enhanced mock data with categories
       const mockArtworks: CollectibleNFT[] = [
         {
           tokenId: '1',
           tokenType: 'ERC721',
           name: 'Digital Dreams #1',
-          description: 'A vibrant digital landscape exploring the intersection of technology and nature.',
+          description: 'A vibrant digital landscape exploring the intersection of technology and nature through abstract forms and flowing colors.',
           image: {
             cachedUrl: '/artwork1.jpg',
             originalUrl: '/artwork1.jpg'
@@ -139,14 +158,15 @@ export default function Home() {
           },
           timeLastUpdated: new Date().toISOString(),
           isForSale: true,
-          salePrice: { value: '0.5', currency: 'ETH' },
-          marketplace: 'OpenSea'
+          salePrice: { value: '0.15', currency: 'ETH' },
+          marketplace: 'OpenSea',
+          category: 'Digital'
         },
         {
           tokenId: '2',
           tokenType: 'ERC721',
           name: 'Neon Genesis #42',
-          description: 'Cyberpunk-inspired artwork with electric blues and magentas.',
+          description: 'Cyberpunk-inspired artwork featuring electric blues and vibrant magentas in a futuristic cityscape composition.',
           image: {
             cachedUrl: '/artwork2.jpg',
             originalUrl: '/artwork2.jpg'
@@ -165,14 +185,15 @@ export default function Home() {
           },
           timeLastUpdated: new Date().toISOString(),
           isForSale: true,
-          salePrice: { value: '0.25', currency: 'ETH' },
-          marketplace: 'Foundation'
+          salePrice: { value: '0.08', currency: 'ETH' },
+          marketplace: 'Foundation',
+          category: 'AI Art'
         },
         {
           tokenId: '3',
           tokenType: 'ERC721',
           name: 'Abstract Emotions',
-          description: 'An emotional journey through color and form.',
+          description: 'An emotional journey through color and form, expressing the complexity of human feelings in abstract visual language.',
           image: {
             cachedUrl: '/artwork3.jpg',
             originalUrl: '/artwork3.jpg'
@@ -191,14 +212,15 @@ export default function Home() {
           },
           timeLastUpdated: new Date().toISOString(),
           isForSale: true,
-          salePrice: { value: '0.75', currency: 'ETH' },
-          marketplace: 'Zora'
+          salePrice: { value: '0.25', currency: 'ETH' },
+          marketplace: 'Zora',
+          category: 'One-of-Ones'
         },
         {
           tokenId: '4',
           tokenType: 'ERC721',
           name: 'Cosmic Journey',
-          description: 'A breathtaking view of distant galaxies and star formations.',
+          description: 'A breathtaking view of distant galaxies and star formations captured through digital photography and enhancement.',
           image: {
             cachedUrl: '/artwork4.jpg',
             originalUrl: '/artwork4.jpg'
@@ -217,14 +239,15 @@ export default function Home() {
           },
           timeLastUpdated: new Date().toISOString(),
           isForSale: true,
-          salePrice: { value: '0.3', currency: 'ETH' },
-          marketplace: 'Rarible'
+          salePrice: { value: '0.05', currency: 'ETH' },
+          marketplace: 'Rarible',
+          category: 'Photography'
         },
         {
           tokenId: '5',
           tokenType: 'ERC721',
           name: 'Urban Poetry',
-          description: 'Street art meets digital innovation in this urban masterpiece.',
+          description: 'Street art meets digital innovation in this urban masterpiece, blending traditional graffiti with modern digital techniques.',
           image: {
             cachedUrl: '/artwork5.jpg',
             originalUrl: '/artwork5.jpg'
@@ -243,8 +266,9 @@ export default function Home() {
           },
           timeLastUpdated: new Date().toISOString(),
           isForSale: true,
-          salePrice: { value: '0.15', currency: 'ETH' },
-          marketplace: 'Manifold'
+          salePrice: { value: '0.12', currency: 'ETH' },
+          marketplace: 'Manifold',
+          category: 'Editions'
         }
       ];
 
@@ -258,9 +282,9 @@ export default function Home() {
   };
 
   const connectWallet = useCallback(() => {
-    // Simulate wallet connection for now
+    // Simulate wallet connection
     setWalletConnected(true);
-    alert('Wallet connected! In a full implementation, this would connect to your Web3 wallet.');
+    alert('🎉 Wallet connected! Welcome to Base Art Club.\n\nStart collecting to earn points and climb the leaderboard!');
   }, []);
 
   const handleSwipe = async (direction: 'left' | 'right' | 'up', artwork: CollectibleNFT) => {
@@ -268,13 +292,23 @@ export default function Home() {
     
     setSwipeDirection(direction);
     
-    // Update stats
+    // Update stats and points
     const newStats = { ...stats };
-    if (direction === 'left') newStats.passed++;
-    else if (direction === 'right') newStats.liked++;
-    else if (direction === 'up') newStats.collected++;
+    let pointsEarned = 0;
+    
+    if (direction === 'left') {
+      newStats.passed++;
+      pointsEarned = 1; // Points for engagement
+    } else if (direction === 'right') {
+      newStats.liked++;
+      pointsEarned = 2; // More points for liking
+    } else if (direction === 'up') {
+      newStats.collected++;
+      pointsEarned = 10; // Most points for collecting
+    }
     
     setStats(newStats);
+    setUserPoints(prev => prev + pointsEarned);
 
     // Handle collection (purchasing)
     if (direction === 'up') {
@@ -287,12 +321,12 @@ export default function Home() {
       setCurrentIndex(prev => prev + 1);
     }, 300);
 
-    console.log(`${direction} swipe on artwork:`, artwork.name);
+    console.log(`${direction} swipe on artwork:`, artwork.name, `+${pointsEarned} points`);
   };
 
   const handleCollectArtwork = async (artwork: CollectibleNFT) => {
     if (!walletConnected) {
-      const shouldConnect = confirm('Connect wallet to collect this artwork?');
+      const shouldConnect = confirm('🔗 Connect wallet to collect this amazing artwork?\n\nYou\'ll earn points and join the collector leaderboard!');
       if (shouldConnect) {
         connectWallet();
       }
@@ -300,7 +334,7 @@ export default function Home() {
     }
 
     if (!artwork.isForSale || !artwork.salePrice) {
-      alert('This artwork is not available for purchase');
+      alert('❌ This artwork is not currently available for purchase');
       return;
     }
 
@@ -308,24 +342,25 @@ export default function Home() {
       setIsCollecting(true);
       
       const confirmed = confirm(
-        `Collect "${artwork.name}" for ${artwork.salePrice.value} ${artwork.salePrice.currency}?\n\nThis would initiate a blockchain transaction on ${artwork.marketplace}.`
+        `🎨 Collect "${artwork.name}"\n\n💰 Price: ${artwork.salePrice.value} ${artwork.salePrice.currency}\n🏪 Marketplace: ${artwork.marketplace}\n📈 Category: ${artwork.category}\n\nProceed with collection?`
       );
       
       if (confirmed) {
         console.log('Collecting NFT:', {
           contract: artwork.contract.address,
           tokenId: artwork.tokenId,
-          price: artwork.salePrice
+          price: artwork.salePrice,
+          category: artwork.category
         });
         
-        // Simulate collection process
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Simulate collection process with realistic timing
+        await new Promise(resolve => setTimeout(resolve, 2500));
         
-        alert(`🎉 Successfully collected "${artwork.name}"!\n\nIn a full implementation, this would:\n• Process payment on ${artwork.marketplace}\n• Transfer NFT to your wallet\n• Show transaction on BaseScan`);
+        alert(`🎉 Successfully collected "${artwork.name}"!\n\n✅ Added to your collection\n🏆 +10 collector points earned\n📊 Check leaderboard for your ranking\n\n🔗 View on ${artwork.marketplace}`);
       }
     } catch (error) {
       console.error('Failed to collect artwork:', error);
-      alert('Failed to collect artwork. Please try again.');
+      alert('❌ Collection failed. Please try again.');
     } finally {
       setIsCollecting(false);
     }
@@ -366,6 +401,7 @@ export default function Home() {
     setCurrentIndex(0);
     setStats({ liked: 0, passed: 0, collected: 0 });
     setSwipeDirection(null);
+    setSelectedCategory(null);
     loadArtworks();
   };
 
@@ -381,8 +417,11 @@ export default function Home() {
     return (
       <div className="app-container">
         <header className="header">
-          <h1>Base Art Club</h1>
-          <p>Discover amazing art on Base</p>
+          <div className="brand-container">
+            <div className="paint-palette"></div>
+            <h1>BASE</h1>
+          </div>
+          <div className="subtitle">art club</div>
         </header>
         <div className="empty-stack">
           <h3>Unable to load artworks</h3>
@@ -404,14 +443,18 @@ export default function Home() {
   return (
     <div className="app-container">
       <header className="header">
-        <h1>Base Art Club</h1>
-        <p>Discover amazing art on Base</p>
+        <div className="brand-container">
+          <div className="paint-palette"></div>
+          <h1>BASE</h1>
+        </div>
+        <div className="subtitle">art club</div>
+        <div className="tagline">every artwork on base, one feed.</div>
         
         {/* Wallet Connection Status */}
-        <div style={{ marginTop: '10px', fontSize: '12px' }}>
+        <div className="wallet-status">
           {walletConnected ? (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
-              <span>🟢 Wallet Connected</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span>🏆 {userPoints} points</span>
               <button 
                 onClick={() => setWalletConnected(false)} 
                 className="wallet-button"
@@ -445,12 +488,31 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Category Filter Pills */}
+      <div className="filter-pills">
+        <div 
+          className={`filter-pill ${!selectedCategory ? 'active' : ''}`}
+          onClick={() => setSelectedCategory(null)}
+        >
+          All
+        </div>
+        {CATEGORIES.map(category => (
+          <div 
+            key={category}
+            className={`filter-pill ${selectedCategory === category ? 'active' : ''}`}
+            onClick={() => setSelectedCategory(category)}
+          >
+            {category}
+          </div>
+        ))}
+      </div>
+
       <div className="card-stack">
         {hasMoreArtworks ? (
           <>
             {/* Next card (background) */}
             {currentIndex + 1 < artworks.length && (
-              <div className="card" style={{ transform: 'scale(0.95)', zIndex: 1 }}>
+              <div className="card" style={{ transform: 'scale(0.95)', zIndex: 1, opacity: 0.8 }}>
                 <img 
                   src={artworks[currentIndex + 1].image.cachedUrl || 
                        artworks[currentIndex + 1].image.thumbnailUrl || 
@@ -460,15 +522,10 @@ export default function Home() {
                 />
                 <div className="card-content">
                   <h3 className="card-title">{artworks[currentIndex + 1].name || 'Untitled'}</h3>
-                  <p className="card-artist">by {artworks[currentIndex + 1].contract.name || 'Unknown'}</p>
+                  <p className="card-artist">by {artworks[currentIndex + 1].contract.name || 'Unknown Artist'}</p>
                   {artworks[currentIndex + 1].isForSale && artworks[currentIndex + 1].salePrice && (
-                    <p className="card-price">{artworks[currentIndex + 1].salePrice!.value} {artworks[currentIndex + 1].salePrice!.currency}</p>
+                    <div className="card-price">{artworks[currentIndex + 1].salePrice!.value} {artworks[currentIndex + 1].salePrice!.currency}</div>
                   )}
-                  <p className="card-description">
-                    {artworks[currentIndex + 1].description || 
-                     artworks[currentIndex + 1].raw.metadata?.description || 
-                     'A unique digital artwork on Base blockchain'}
-                  </p>
                 </div>
               </div>
             )}
@@ -481,7 +538,7 @@ export default function Home() {
               drag
               dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
               onPanEnd={handlePanEnd}
-              whileDrag={{ scale: 1.05 }}
+              whileDrag={{ scale: 1.02 }}
             >
               {currentArtwork.isForSale && (
                 <div className="collection-status for-sale">For Sale</div>
@@ -495,20 +552,28 @@ export default function Home() {
               />
               <div className="card-content">
                 <h3 className="card-title">{currentArtwork.name || 'Untitled'}</h3>
-                <p className="card-artist">by {currentArtwork.contract.name || 'Unknown'}</p>
-                {currentArtwork.isForSale && currentArtwork.salePrice && (
-                  <p className="card-price">{currentArtwork.salePrice.value} {currentArtwork.salePrice.currency}</p>
+                <p className="card-artist">by {currentArtwork.contract.name || 'Unknown Artist'}</p>
+                
+                {currentArtwork.category && (
+                  <div className="filter-pill" style={{ marginBottom: '8px', fontSize: '11px' }}>
+                    {currentArtwork.category}
+                  </div>
                 )}
+                
+                {currentArtwork.isForSale && currentArtwork.salePrice && (
+                  <div className="card-price">{currentArtwork.salePrice.value} {currentArtwork.salePrice.currency}</div>
+                )}
+                
                 <p className="card-description">
                   {currentArtwork.description || 
                    currentArtwork.raw.metadata?.description || 
-                   'A unique digital artwork on Base blockchain'}
+                   'A unique digital artwork minted on Base blockchain, representing the cutting edge of digital art and creative expression.'}
                 </p>
                 
                 {/* NFT Metadata */}
                 <div className="card-metadata">
-                  <div>Token #{currentArtwork.tokenId}</div>
-                  <div>Contract: {currentArtwork.contract.address.slice(0, 8)}...</div>
+                  <div>Token #{currentArtwork.tokenId} • {currentArtwork.tokenType}</div>
+                  <div>{currentArtwork.contract.address.slice(0, 8)}...{currentArtwork.contract.address.slice(-6)}</div>
                   {currentArtwork.marketplace && (
                     <div>Available on {currentArtwork.marketplace}</div>
                   )}
@@ -528,8 +593,8 @@ export default function Home() {
           </>
         ) : (
           <div className="empty-stack">
-            <h3>You've seen all artworks!</h3>
-            <p>Check back later for more amazing pieces from Base</p>
+            <h3>🎉 You've discovered all artworks!</h3>
+            <p>Amazing work! You've explored every piece in our curated collection. New artworks are added regularly, so check back soon for more incredible discoveries.</p>
             <button className="reload-button" onClick={resetStack}>
               Discover More
             </button>
@@ -543,6 +608,7 @@ export default function Home() {
             className="control-button pass-button"
             onClick={() => handleButtonAction('pass')}
             disabled={isCollecting}
+            title="Pass (+1 point)"
           >
             ✕
           </button>
@@ -550,10 +616,7 @@ export default function Home() {
             className="control-button collect-button"
             onClick={() => handleButtonAction('collect')}
             disabled={isCollecting || !currentArtwork?.isForSale}
-            style={{ 
-              opacity: isCollecting ? 0.5 : currentArtwork?.isForSale ? 1 : 0.3,
-              cursor: isCollecting || !currentArtwork?.isForSale ? 'not-allowed' : 'pointer'
-            }}
+            title={`Collect ${currentArtwork?.isForSale ? '(+10 points)' : '(Not for sale)'}`}
           >
             {isCollecting ? '⏳' : '⭐'}
           </button>
@@ -561,6 +624,7 @@ export default function Home() {
             className="control-button like-button"
             onClick={() => handleButtonAction('like')}
             disabled={isCollecting}
+            title="Like (+2 points)"
           >
             ♡
           </button>
