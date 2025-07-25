@@ -4,32 +4,22 @@ import './globals.css';
 import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { http, createConfig } from 'wagmi'
-import { base, baseSepolia } from 'wagmi/chains'
-import { injected, metaMask, coinbaseWallet, walletConnect } from '@wagmi/connectors'
+import { base } from 'wagmi/chains'
+import { injected } from '@wagmi/connectors'
 
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://baseartclub.xyz';
 
 // Create a query client for Wagmi
 const queryClient = new QueryClient()
 
-// Wagmi configuration with Base blockchain support and standard connectors
+// Simple Wagmi configuration with just Base and injected connector
 const config = createConfig({
-  chains: [base, baseSepolia],
+  chains: [base],
   transports: {
-    [base.id]: http(`https://base-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`),
-    [baseSepolia.id]: http(`https://base-sepolia.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`),
+    [base.id]: http(),
   },
   connectors: [
     injected(),
-    metaMask(),
-    coinbaseWallet({
-      appName: 'Base Art Club',
-    }),
-    ...(process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ? [
-      walletConnect({
-        projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
-      })
-    ] : []),
   ],
 })
 
