@@ -1,50 +1,39 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { motion, PanInfo, useAnimation } from 'framer-motion';
 import { sdk } from '@farcaster/frame-sdk';
 
-interface NFTMetadata {
-  name?: string
-  description?: string
-  image?: string
-  attributes?: Array<{
-    trait_type: string
-    value: string | number
-  }>
+// Types
+interface NFTImage {
+  cachedUrl?: string;
+  thumbnailUrl?: string;
+  originalUrl?: string;
 }
 
 interface NFTContract {
-  address: string
-  name?: string
-  symbol?: string
-  tokenType: 'ERC721' | 'ERC1155'
+  address: string;
+  name?: string;
+  symbol?: string;
+  tokenType: 'ERC721' | 'ERC1155';
 }
 
 interface BaseNFT {
-  tokenId: string
-  tokenType: 'ERC721' | 'ERC1155'
-  name?: string
-  description?: string
-  image: {
-    cachedUrl?: string
-    thumbnailUrl?: string
-    originalUrl?: string
-  }
-  raw: {
-    metadata?: NFTMetadata
-  }
-  contract: NFTContract
-  timeLastUpdated: string
+  tokenId: string;
+  tokenType: 'ERC721' | 'ERC1155';
+  name?: string;
+  description?: string;
+  image: NFTImage;
+  contract: NFTContract;
+  metadata?: any;
+  marketplace?: string;
+  price?: {
+    value: string;
+    currency: string;
+  };
 }
 
 interface CollectibleNFT extends BaseNFT {
   isForSale?: boolean;
-  salePrice?: {
-    value: string;
-    currency: string;
-  };
-  marketplace?: string;
   category?: string;
 }
 
@@ -62,34 +51,28 @@ const CATEGORIES = [
   'Digital',
 ];
 
-const PRICE_RANGES = [
-  'Freemint',
-  'Under 0.1 ETH',
-  'Under 1 ETH',
-  'Over 1 ETH'
-];
-
 export default function Home() {
   const [artworks, setArtworks] = useState<CollectibleNFT[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState<SwipeStats>({ liked: 0, passed: 0, collected: 0 });
-  const [swipeDirection, setSwipeDirection] = useState<string | null>(null);
   const [isCollecting, setIsCollecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [walletConnected, setWalletConnected] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [userPoints, setUserPoints] = useState(0);
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   
-  const controls = useAnimation();
-
   // Initialize Farcaster SDK and load artworks
   useEffect(() => {
     const initializeApp = async () => {
       try {
         // Initialize Farcaster SDK
-        await sdk.actions.ready();
-        console.log('Farcaster SDK initialized');
+        try {
+          await sdk.actions.ready();
+          console.log('Farcaster SDK initialized');
+        } catch (sdkError) {
+          console.log('Failed to initialize Farcaster SDK, continuing anyway');
+        }
         
         // Load NFT artworks
         await loadArtworks();
@@ -108,255 +91,184 @@ export default function Home() {
       setIsLoading(true);
       setError(null);
       
-      // Try to fetch from our API first, fallback to mock data
-      try {
-        const response = await fetch('/api/nfts?action=curated&limit=20');
-        const data = await response.json();
+      console.log('Fetching artworks...');
+      const response = await fetch('/api/nfts?action=curated&limit=20');
+      const data = await response.json();
+      
+      console.log('API Response:', data);
+      
+      if (data.success && data.data && data.data.length > 0) {
+        const collectibleNFTs: CollectibleNFT[] = data.data.map((nft: BaseNFT) => ({
+          ...nft,
+          isForSale: !!nft.price,
+          category: CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)],
+        }));
         
-        if (data.success && data.data.length > 0) {
-          const collectibleNFTs: CollectibleNFT[] = data.data.map((nft: BaseNFT) => ({
-            ...nft,
-            isForSale: Math.random() > 0.3,
-            salePrice: {
-              value: (Math.random() * 0.5 + 0.1).toFixed(3),
-              currency: 'ETH',
-            },
-            marketplace: 'OpenSea',
-            category: CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)],
-          }));
-          
-          setArtworks(collectibleNFTs);
-          setIsLoading(false);
-          return;
-        }
-      } catch (apiError) {
-        console.log('API not available, using mock data');
+        setArtworks(collectibleNFTs);
+        console.log('Loaded artworks:', collectibleNFTs.length);
+      } else {
+        // Use mock data if API fails
+        console.log('Using mock data');
+        setArtworks(getMockArtworks());
       }
-
-      // Enhanced mock data with categories
-      const mockArtworks: CollectibleNFT[] = [
-        {
-          tokenId: '1',
-          tokenType: 'ERC721',
-          name: 'Digital Dreams #1',
-          description: 'A vibrant digital landscape exploring the intersection of technology and nature through abstract forms and flowing colors.',
-          image: {
-            cachedUrl: '/artwork1.jpg',
-            originalUrl: '/artwork1.jpg'
-          },
-          raw: {
-            metadata: {
-              name: 'Digital Dreams #1',
-              description: 'A vibrant digital landscape exploring the intersection of technology and nature.',
-              image: '/artwork1.jpg'
-            }
-          },
-          contract: {
-            address: '0x036721e5A681E02A730b05e2B56e9b7189f2A3F8',
-            name: 'Based Ghouls',
-            tokenType: 'ERC721'
-          },
-          timeLastUpdated: new Date().toISOString(),
-          isForSale: true,
-          salePrice: { value: '0.15', currency: 'ETH' },
-          marketplace: 'OpenSea',
-          category: 'Digital'
-        },
-        {
-          tokenId: '2',
-          tokenType: 'ERC721',
-          name: 'Neon Genesis #42',
-          description: 'Cyberpunk-inspired artwork featuring electric blues and vibrant magentas in a futuristic cityscape composition.',
-          image: {
-            cachedUrl: '/artwork2.jpg',
-            originalUrl: '/artwork2.jpg'
-          },
-          raw: {
-            metadata: {
-              name: 'Neon Genesis #42',
-              description: 'Cyberpunk-inspired artwork with electric blues and magentas.',
-              image: '/artwork2.jpg'
-            }
-          },
-          contract: {
-            address: '0x4F89Bbe2c2C896819f246F3dce8A33F5B1aB4586',
-            name: 'Base Punks',
-            tokenType: 'ERC721'
-          },
-          timeLastUpdated: new Date().toISOString(),
-          isForSale: true,
-          salePrice: { value: '0.08', currency: 'ETH' },
-          marketplace: 'Foundation',
-          category: 'AI Art'
-        },
-        {
-          tokenId: '3',
-          tokenType: 'ERC721',
-          name: 'Abstract Emotions',
-          description: 'An emotional journey through color and form, expressing the complexity of human feelings in abstract visual language.',
-          image: {
-            cachedUrl: '/artwork3.jpg',
-            originalUrl: '/artwork3.jpg'
-          },
-          raw: {
-            metadata: {
-              name: 'Abstract Emotions',
-              description: 'An emotional journey through color and form.',
-              image: '/artwork3.jpg'
-            }
-          },
-          contract: {
-            address: '0x1538C5c8FbE7c1F0FF63F5b3F59cbad74B41db87',
-            name: 'Base Names',
-            tokenType: 'ERC721'
-          },
-          timeLastUpdated: new Date().toISOString(),
-          isForSale: true,
-          salePrice: { value: '0.25', currency: 'ETH' },
-          marketplace: 'Zora',
-          category: 'One-of-Ones'
-        },
-        {
-          tokenId: '4',
-          tokenType: 'ERC721',
-          name: 'Cosmic Journey',
-          description: 'A breathtaking view of distant galaxies and star formations captured through digital photography and enhancement.',
-          image: {
-            cachedUrl: '/artwork4.jpg',
-            originalUrl: '/artwork4.jpg'
-          },
-          raw: {
-            metadata: {
-              name: 'Cosmic Journey',
-              description: 'A breathtaking view of distant galaxies and star formations.',
-              image: '/artwork4.jpg'
-            }
-          },
-          contract: {
-            address: '0x03c4738Ee98aE44591e1A4A4F3CaB6641d95DD9a',
-            name: 'Tiny Based Frogs',
-            tokenType: 'ERC721'
-          },
-          timeLastUpdated: new Date().toISOString(),
-          isForSale: true,
-          salePrice: { value: '0.05', currency: 'ETH' },
-          marketplace: 'Rarible',
-          category: 'Photography'
-        },
-        {
-          tokenId: '5',
-          tokenType: 'ERC721',
-          name: 'Urban Poetry',
-          description: 'Street art meets digital innovation in this urban masterpiece, blending traditional graffiti with modern digital techniques.',
-          image: {
-            cachedUrl: '/artwork5.jpg',
-            originalUrl: '/artwork5.jpg'
-          },
-          raw: {
-            metadata: {
-              name: 'Urban Poetry',
-              description: 'Street art meets digital innovation in this urban masterpiece.',
-              image: '/artwork5.jpg'
-            }
-          },
-          contract: {
-            address: '0x7F7f3aFc9eA11b8e3b6a89071c94ce3155fb4Ccb',
-            name: 'Based Vitalik',
-            tokenType: 'ERC721'
-          },
-          timeLastUpdated: new Date().toISOString(),
-          isForSale: true,
-          salePrice: { value: '0.12', currency: 'ETH' },
-          marketplace: 'Manifold',
-          category: 'Editions'
-        }
-      ];
-
-      setArtworks(mockArtworks);
+      
       setIsLoading(false);
     } catch (error) {
       console.error('Failed to load artworks:', error);
-      setError('Failed to load artworks. Please try again.');
+      setError('Failed to load artworks. Using demo data.');
+      setArtworks(getMockArtworks());
       setIsLoading(false);
     }
   };
 
+  const getMockArtworks = (): CollectibleNFT[] => {
+    return [
+      {
+        tokenId: '1',
+        tokenType: 'ERC721',
+        name: 'Digital Dreams #1',
+        description: 'A vibrant digital landscape exploring the intersection of technology and nature.',
+        image: {
+          cachedUrl: '/artwork1.jpg',
+          originalUrl: '/artwork1.jpg'
+        },
+        contract: {
+          address: '0x036721e5A681E02A730b05e2B56e9b7189f2A3F8',
+          name: 'Based Ghouls',
+          tokenType: 'ERC721'
+        },
+        isForSale: true,
+        price: { value: '0.15', currency: 'ETH' },
+        marketplace: 'OpenSea',
+        category: 'Digital'
+      },
+      {
+        tokenId: '2',
+        tokenType: 'ERC721',
+        name: 'Neon Genesis #42',
+        description: 'Cyberpunk-inspired artwork with electric blues and magentas.',
+        image: {
+          cachedUrl: '/artwork2.jpg',
+          originalUrl: '/artwork2.jpg'
+        },
+        contract: {
+          address: '0x4F89Bbe2c2C896819f246F3dce8A33F5B1aB4586',
+          name: 'Base Punks',
+          tokenType: 'ERC721'
+        },
+        isForSale: true,
+        price: { value: '0.08', currency: 'ETH' },
+        marketplace: 'Foundation',
+        category: 'AI Art'
+      },
+      {
+        tokenId: '3',
+        tokenType: 'ERC721',
+        name: 'Abstract Emotions',
+        description: 'An emotional journey through color and form.',
+        image: {
+          cachedUrl: '/artwork3.jpg',
+          originalUrl: '/artwork3.jpg'
+        },
+        contract: {
+          address: '0x1538C5c8FbE7c1F0FF63F5b3F59cbad74B41db87',
+          name: 'Base Names',
+          tokenType: 'ERC721'
+        },
+        isForSale: true,
+        price: { value: '0.25', currency: 'ETH' },
+        marketplace: 'Zora',
+        category: 'One-of-Ones'
+      },
+    ];
+  };
+
   const connectWallet = useCallback(() => {
-    // Simulate wallet connection
     setWalletConnected(true);
-    alert('🎉 Wallet connected! Welcome to Base Art Club.\n\nStart collecting to earn points and climb the leaderboard!');
+    alert('🎉 Wallet connected! Welcome to Base Art Club.\n\nStart collecting to earn points!');
   }, []);
 
-  const handleSwipe = async (direction: 'left' | 'right' | 'up', artwork: CollectibleNFT) => {
+  const showFeedback = (message: string) => {
+    setActionFeedback(message);
+    setTimeout(() => setActionFeedback(null), 2000);
+  };
+
+  const handleAction = async (action: 'pass' | 'like' | 'collect', artwork: CollectibleNFT) => {
     if (isCollecting) return;
-    
-    setSwipeDirection(direction);
     
     // Update stats and points
     const newStats = { ...stats };
     let pointsEarned = 0;
     
-    if (direction === 'left') {
-      newStats.passed++;
-      pointsEarned = 1; // Points for engagement
-    } else if (direction === 'right') {
-      newStats.liked++;
-      pointsEarned = 2; // More points for liking
-    } else if (direction === 'up') {
-      newStats.collected++;
-      pointsEarned = 10; // Most points for collecting
+    switch (action) {
+      case 'pass':
+        newStats.passed++;
+        pointsEarned = 1;
+        showFeedback('➡️ Passed');
+        break;
+      case 'like':
+        newStats.liked++;
+        pointsEarned = 2;
+        showFeedback('❤️ Liked!');
+        break;
+      case 'collect':
+        newStats.collected++;
+        pointsEarned = 10;
+        await handleCollectArtwork(artwork);
+        break;
     }
     
     setStats(newStats);
     setUserPoints(prev => prev + pointsEarned);
 
-    // Handle collection (purchasing)
-    if (direction === 'up') {
-      await handleCollectArtwork(artwork);
+    // Move to next artwork after a short delay
+    if (action !== 'collect') {
+      setTimeout(() => {
+        setCurrentIndex(prev => prev + 1);
+      }, 500);
     }
 
-    // Show swipe indicator briefly
-    setTimeout(() => {
-      setSwipeDirection(null);
-      setCurrentIndex(prev => prev + 1);
-    }, 300);
-
-    console.log(`${direction} swipe on artwork:`, artwork.name, `+${pointsEarned} points`);
+    console.log(`${action} artwork:`, artwork.name, `+${pointsEarned} points`);
   };
 
   const handleCollectArtwork = async (artwork: CollectibleNFT) => {
     if (!walletConnected) {
-      const shouldConnect = confirm('🔗 Connect wallet to collect this amazing artwork?\n\nYou\'ll earn points and join the collector leaderboard!');
+      const shouldConnect = confirm('🔗 Connect wallet to collect this artwork?\n\nYou\'ll earn points and join the collector leaderboard!');
       if (shouldConnect) {
         connectWallet();
       }
       return;
     }
 
-    if (!artwork.isForSale || !artwork.salePrice) {
+    if (!artwork.isForSale || !artwork.price) {
       alert('❌ This artwork is not currently available for purchase');
       return;
     }
 
     try {
       setIsCollecting(true);
+      showFeedback('🔄 Processing...');
       
       const confirmed = confirm(
-        `🎨 Collect "${artwork.name}"\n\n💰 Price: ${artwork.salePrice.value} ${artwork.salePrice.currency}\n🏪 Marketplace: ${artwork.marketplace}\n📈 Category: ${artwork.category}\n\nProceed with collection?`
+        `🎨 Collect "${artwork.name}"\n\n💰 Price: ${artwork.price.value} ${artwork.price.currency}\n🏪 Marketplace: ${artwork.marketplace}\n📈 Category: ${artwork.category}\n\nProceed with collection?`
       );
       
       if (confirmed) {
         console.log('Collecting NFT:', {
           contract: artwork.contract.address,
           tokenId: artwork.tokenId,
-          price: artwork.salePrice,
-          category: artwork.category
+          price: artwork.price,
         });
         
-        // Simulate collection process with realistic timing
-        await new Promise(resolve => setTimeout(resolve, 2500));
+        // Simulate collection process
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
-        alert(`🎉 Successfully collected "${artwork.name}"!\n\n✅ Added to your collection\n🏆 +10 collector points earned\n📊 Check leaderboard for your ranking\n\n🔗 View on ${artwork.marketplace}`);
+        showFeedback('✅ Collected!');
+        alert(`🎉 Successfully collected "${artwork.name}"!\n\n✅ Added to your collection\n🏆 +10 points earned\n\n🔗 View on ${artwork.marketplace}`);
+        
+        setTimeout(() => {
+          setCurrentIndex(prev => prev + 1);
+        }, 1000);
       }
     } catch (error) {
       console.error('Failed to collect artwork:', error);
@@ -366,54 +278,25 @@ export default function Home() {
     }
   };
 
-  const handlePanEnd = (event: any, info: PanInfo) => {
-    if (isCollecting || currentIndex >= artworks.length) return;
-    
-    const threshold = 100;
-    const velocity = 500;
-    
-    if (Math.abs(info.offset.x) > threshold || Math.abs(info.velocity.x) > velocity) {
-      if (info.offset.x > 0) {
-        handleSwipe('right', artworks[currentIndex]);
-      } else {
-        handleSwipe('left', artworks[currentIndex]);
-      }
-    } else if (info.offset.y < -threshold || info.velocity.y < -velocity) {
-      handleSwipe('up', artworks[currentIndex]);
-    } else {
-      controls.start({ x: 0, y: 0, rotate: 0 });
-    }
-  };
-
-  const handleButtonAction = (action: 'pass' | 'like' | 'collect') => {
-    if (currentIndex >= artworks.length || isCollecting) return;
-    
-    const directionMap = {
-      pass: 'left' as const,
-      like: 'right' as const,
-      collect: 'up' as const
-    };
-    
-    handleSwipe(directionMap[action], artworks[currentIndex]);
-  };
-
-  const resetStack = () => {
+  const resetGallery = () => {
     setCurrentIndex(0);
     setStats({ liked: 0, passed: 0, collected: 0 });
-    setSwipeDirection(null);
-    setSelectedCategory(null);
+    setUserPoints(0);
     loadArtworks();
   };
 
   if (isLoading) {
     return (
-      <div className="loading">
-        <div>Loading amazing artworks from Base...</div>
+      <div className="app-container">
+        <div className="loading">
+          <div className="loading-spinner"></div>
+          <div>Loading amazing artworks from Base...</div>
+        </div>
       </div>
     );
   }
 
-  if (error) {
+  if (error && artworks.length === 0) {
     return (
       <div className="app-container">
         <header className="header">
@@ -436,9 +319,6 @@ export default function Home() {
 
   const currentArtwork = artworks[currentIndex];
   const hasMoreArtworks = currentIndex < artworks.length;
-  const imageUrl = currentArtwork?.image.cachedUrl || 
-                   currentArtwork?.image.thumbnailUrl || 
-                   currentArtwork?.image.originalUrl;
 
   return (
     <div className="app-container">
@@ -488,146 +368,108 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Category Filter Pills */}
-      <div className="filter-pills">
-        <div 
-          className={`filter-pill ${!selectedCategory ? 'active' : ''}`}
-          onClick={() => setSelectedCategory(null)}
-        >
-          All
-        </div>
-        {CATEGORIES.map(category => (
-          <div 
-            key={category}
-            className={`filter-pill ${selectedCategory === category ? 'active' : ''}`}
-            onClick={() => setSelectedCategory(category)}
-          >
-            {category}
-          </div>
-        ))}
-      </div>
-
-      <div className="card-stack">
-        {hasMoreArtworks ? (
-          <>
-            {/* Next card (background) */}
-            {currentIndex + 1 < artworks.length && (
-              <div className="card" style={{ transform: 'scale(0.95)', zIndex: 1, opacity: 0.8 }}>
-                <img 
-                  src={artworks[currentIndex + 1].image.cachedUrl || 
-                       artworks[currentIndex + 1].image.thumbnailUrl || 
-                       artworks[currentIndex + 1].image.originalUrl} 
-                  alt={artworks[currentIndex + 1].name || 'NFT'}
-                  className="card-image"
-                />
-                <div className="card-content">
-                  <h3 className="card-title">{artworks[currentIndex + 1].name || 'Untitled'}</h3>
-                  <p className="card-artist">by {artworks[currentIndex + 1].contract.name || 'Unknown Artist'}</p>
-                  {artworks[currentIndex + 1].isForSale && artworks[currentIndex + 1].salePrice && (
-                    <div className="card-price">{artworks[currentIndex + 1].salePrice!.value} {artworks[currentIndex + 1].salePrice!.currency}</div>
-                  )}
-                </div>
-              </div>
+      {/* Main Content Area */}
+      <div className="artwork-container">
+        {hasMoreArtworks && currentArtwork ? (
+          <div className="artwork-card">
+            {currentArtwork.isForSale && (
+              <div className="collection-status for-sale">For Sale</div>
             )}
-
-            {/* Current card */}
-            <motion.div
-              className="card"
-              style={{ zIndex: 2 }}
-              animate={controls}
-              drag
-              dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-              onPanEnd={handlePanEnd}
-              whileDrag={{ scale: 1.02 }}
-            >
-              {currentArtwork.isForSale && (
-                <div className="collection-status for-sale">For Sale</div>
+            
+            {/* Action Feedback */}
+            {actionFeedback && (
+              <div className="action-feedback">{actionFeedback}</div>
+            )}
+            
+            <div className="artwork-image-container">
+              <img 
+                src={currentArtwork.image.cachedUrl || currentArtwork.image.originalUrl || '/artwork1.jpg'} 
+                alt={currentArtwork.name || 'NFT'}
+                className="artwork-image"
+                onError={(e) => {
+                  console.error('Image failed to load:', e);
+                  e.currentTarget.src = '/artwork1.jpg';
+                }}
+              />
+            </div>
+            
+            <div className="artwork-details">
+              <h2 className="artwork-title">{currentArtwork.name || 'Untitled'}</h2>
+              <p className="artwork-artist">by {currentArtwork.contract.name || 'Unknown Artist'}</p>
+              
+              {currentArtwork.category && (
+                <span className="artwork-category">{currentArtwork.category}</span>
               )}
               
-              <img 
-                src={imageUrl} 
-                alt={currentArtwork.name || 'NFT'}
-                className="card-image"
-                style={{ objectFit: 'cover' }}
-              />
-              <div className="card-content">
-                <h3 className="card-title">{currentArtwork.name || 'Untitled'}</h3>
-                <p className="card-artist">by {currentArtwork.contract.name || 'Unknown Artist'}</p>
-                
-                {currentArtwork.category && (
-                  <div className="filter-pill" style={{ marginBottom: '8px', fontSize: '11px' }}>
-                    {currentArtwork.category}
-                  </div>
-                )}
-                
-                {currentArtwork.isForSale && currentArtwork.salePrice && (
-                  <div className="card-price">{currentArtwork.salePrice.value} {currentArtwork.salePrice.currency}</div>
-                )}
-                
-                <p className="card-description">
-                  {currentArtwork.description || 
-                   currentArtwork.raw.metadata?.description || 
-                   'A unique digital artwork minted on Base blockchain, representing the cutting edge of digital art and creative expression.'}
-                </p>
-                
-                {/* NFT Metadata */}
-                <div className="card-metadata">
-                  <div>Token #{currentArtwork.tokenId} • {currentArtwork.tokenType}</div>
-                  <div>{currentArtwork.contract.address.slice(0, 8)}...{currentArtwork.contract.address.slice(-6)}</div>
-                  {currentArtwork.marketplace && (
-                    <div>Available on {currentArtwork.marketplace}</div>
-                  )}
-                </div>
-              </div>
-
-              {swipeDirection && (
-                <div className={`swipe-indicator ${
-                  swipeDirection === 'left' ? 'pass' : 
-                  swipeDirection === 'right' ? 'like' : 'collect'
-                }`} style={{ opacity: 1 }}>
-                  {swipeDirection === 'left' ? 'PASS' : 
-                   swipeDirection === 'right' ? 'LIKE' : 'COLLECT'}
+              {currentArtwork.isForSale && currentArtwork.price && (
+                <div className="artwork-price">
+                  {currentArtwork.price.value} {currentArtwork.price.currency}
                 </div>
               )}
-            </motion.div>
-          </>
+              
+              <p className="artwork-description">
+                {currentArtwork.description || 'A unique digital artwork on Base blockchain.'}
+              </p>
+              
+              <div className="artwork-metadata">
+                <div>Token #{currentArtwork.tokenId}</div>
+                <div>{currentArtwork.marketplace || 'OpenSea'}</div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="action-buttons">
+              <button 
+                className="action-button pass-button"
+                onClick={() => handleAction('pass', currentArtwork)}
+                disabled={isCollecting}
+              >
+                <span className="button-icon">✕</span>
+                <span className="button-text">Pass</span>
+              </button>
+              
+              <button 
+                className="action-button like-button"
+                onClick={() => handleAction('like', currentArtwork)}
+                disabled={isCollecting}
+              >
+                <span className="button-icon">♡</span>
+                <span className="button-text">Like</span>
+              </button>
+              
+              <button 
+                className="action-button collect-button"
+                onClick={() => handleAction('collect', currentArtwork)}
+                disabled={isCollecting || !currentArtwork.isForSale}
+              >
+                <span className="button-icon">{isCollecting ? '⏳' : '⭐'}</span>
+                <span className="button-text">{isCollecting ? 'Processing' : 'Collect'}</span>
+              </button>
+            </div>
+          </div>
         ) : (
           <div className="empty-stack">
             <h3>🎉 You've discovered all artworks!</h3>
-            <p>Amazing work! You've explored every piece in our curated collection. New artworks are added regularly, so check back soon for more incredible discoveries.</p>
-            <button className="reload-button" onClick={resetStack}>
-              Discover More
+            <p>Amazing work! You've explored {artworks.length} pieces in our collection.</p>
+            <button className="reload-button" onClick={resetGallery}>
+              Start Over
             </button>
           </div>
         )}
       </div>
 
+      {/* Progress indicator */}
       {hasMoreArtworks && (
-        <div className="controls">
-          <button 
-            className="control-button pass-button"
-            onClick={() => handleButtonAction('pass')}
-            disabled={isCollecting}
-            title="Pass (+1 point)"
-          >
-            ✕
-          </button>
-          <button 
-            className="control-button collect-button"
-            onClick={() => handleButtonAction('collect')}
-            disabled={isCollecting || !currentArtwork?.isForSale}
-            title={`Collect ${currentArtwork?.isForSale ? '(+10 points)' : '(Not for sale)'}`}
-          >
-            {isCollecting ? '⏳' : '⭐'}
-          </button>
-          <button 
-            className="control-button like-button"
-            onClick={() => handleButtonAction('like')}
-            disabled={isCollecting}
-            title="Like (+2 points)"
-          >
-            ♡
-          </button>
+        <div className="progress-container">
+          <div className="progress-text">
+            {currentIndex + 1} of {artworks.length}
+          </div>
+          <div className="progress-bar">
+            <div 
+              className="progress-fill" 
+              style={{ width: `${((currentIndex + 1) / artworks.length) * 100}%` }}
+            />
+          </div>
         </div>
       )}
     </div>
