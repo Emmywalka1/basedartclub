@@ -1,0 +1,33 @@
+{
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors 'self' https://farcaster.xyz https://*.farcaster.xyz https://warpcast.com https://*.warpcast.com https://miniapps.farcaster.xyz https://*.fc-miniapps.pages.dev https://fc-miniapps.pages.dev https://warpcast.com/~/developers/mini-apps/* http://localhost:*;"
+        },
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type"
+        }
+      ]
+    }
+  ],
+  "functions": {
+    "app/api/nfts/route.ts": {
+      "maxDuration": 10
+    },
+    "app/api/manifest/route.ts": {
+      "maxDuration": 10
+    }
+  }
+}
