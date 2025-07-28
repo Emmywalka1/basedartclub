@@ -31,13 +31,36 @@ const nextConfig = {
       {
         source: '/(.*)',
         headers: [
-          {
-            key: 'X-Frame-Options',
-            value: 'SAMEORIGIN',
-          },
+          // Remove X-Frame-Options to allow embedding
+          // X-Frame-Options conflicts with CSP frame-ancestors
           {
             key: 'Content-Security-Policy',
-            value: "frame-ancestors 'self' https://*.farcaster.xyz https://*.warpcast.com;",
+            value: [
+              "frame-ancestors",
+              "'self'",
+              "https://*.farcaster.xyz",
+              "https://farcaster.xyz", 
+              "https://*.warpcast.com",
+              "https://warpcast.com",
+              "https://warpcast.com/~/developers/mini-apps/*",
+              "https://miniapps.farcaster.xyz",
+              "https://*.fc-miniapps.pages.dev",
+              "https://fc-miniapps.pages.dev",
+              "http://localhost:*"
+            ].join(' ') + ';',
+          },
+          // Add CORS headers for API access
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
+          },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET, POST, OPTIONS',
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: 'Content-Type',
           },
         ],
       },
