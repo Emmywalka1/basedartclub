@@ -1,6 +1,6 @@
 import './globals.css';
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://baseartclub.xyz';
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://basedartclub.vercel.app';
 
 export const metadata = {
   title: 'Base Art Club',
