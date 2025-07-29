@@ -9,11 +9,12 @@ const cache = new Map<string, { data: any; timestamp: number }>();
 // Cleanup old cache entries
 const cleanupCache = () => {
   const now = Date.now();
-  for (const [key, entry] of cache.entries()) {
+  // Use Map.forEach() for better ES5 compatibility
+  cache.forEach((entry, key) => {
     if (now - entry.timestamp > CACHE_DURATION * 1000) {
       cache.delete(key);
     }
-  }
+  });
 };
 
 // Cleanup every 10 minutes
