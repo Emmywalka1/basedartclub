@@ -33,3 +33,13 @@
   "author": "Base Art Club",
   "license": "MIT"
 }
+{
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test-api": "node scripts/test-api.js",
+    "create-images": "node scripts/create-test-images.js"
+  }
+}
