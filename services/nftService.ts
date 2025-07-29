@@ -1,35 +1,14 @@
-// services/nftService.ts - Updated to use only your existing APIs
+// services/nftService.ts - ES5 Compatible Version
 import axios from 'axios';
 
 // Your existing API configuration
 const MORALIS_API_KEY = process.env.MORALIS_API_KEY!;
 const MORALIS_BASE_URL = 'https://deep-index.moralis.io/api/v2';
 const ALCHEMY_API_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY!;
-const ALCHEMY_BASE_URL = `https://base-mainnet.g.alchemy.com/nft/v3/${ALCHEMY_API_KEY}`;
+const ALCHEMY_BASE_URL = 'https://base-mainnet.g.alchemy.com/nft/v3/' + ALCHEMY_API_KEY;
 const OPENSEA_API_KEY = process.env.OPENSEA_API_KEY;
 
-// Updated Base marketplace contract addresses (2025)
-const BASE_MARKETPLACE_CONTRACTS = {
-  foundation: [
-    '0xcda72070e455bb31c7690a170224ce43623d0b6f', // Foundation V3 on Base
-    '0x83bb9b2d1a0ae10dd5b30a87c5b88e50ce7a9f48', // Foundation Market
-  ],
-  opensea: [
-    '0x00000000000000adc04c56bf30ac9d3c0aaf14dc', // Seaport 1.5
-    '0x00000000000001ad428e4906ae43d8f9852d0dd6', // Seaport 1.6
-  ],
-  zora: [
-    '0x76744367ae5a056381868f716bdf0b13ae1aeaa3', // Zora V3 Module Manager 
-    '0x04e2516a2c207e84a1839755675dfd8ef6302f0a', // Zora ERC721 Transfer Helper
-    '0x33333311a2e4b9eb8de05d7b9cd6e22be2bc79d4', // Zora Rewards Manager
-  ],
-  manifold: [
-    '0x3a3548e060be10c2614d0a4cb0c03cc9093fd799', // Manifold Creator Core
-    '0x0fc584e9dcfe271b2c43a16caa55b7d5d39b27dc', // Manifold Marketplace
-  ]
-};
-
-// Updated popular Base collections (2025)
+// Updated Base collections
 const BASE_COLLECTIONS = [
   {
     address: '0x036721e5A681E02A730b05e2B56e9b7189f2A3F8',
@@ -103,12 +82,13 @@ export class NFTService {
       const nfts: NFTAsset[] = [];
       
       // Fetch from multiple Base collections using your existing Alchemy setup
-      for (const collection of BASE_COLLECTIONS.slice(0, 4)) {
+      for (let i = 0; i < Math.min(BASE_COLLECTIONS.length, 4); i++) {
+        const collection = BASE_COLLECTIONS[i];
         try {
-          console.log(`Fetching from ${collection.name} via Alchemy...`);
+          console.log('Fetching from ' + collection.name + ' via Alchemy...');
           
           const response = await axios.get(
-            `${ALCHEMY_BASE_URL}/getNFTsForContract`,
+            ALCHEMY_BASE_URL + '/getNFTsForContract',
             {
               params: {
                 contractAddress: collection.address,
@@ -120,20 +100,24 @@ export class NFTService {
             }
           );
 
-          if (response.data?.nfts?.length > 0) {
-            const formattedNFTs = response.data.nfts
-              .filter((nft: any) => nft.image?.cachedUrl || nft.image?.originalUrl)
-              .map((nft: any) => this.formatAlchemyNFT(nft, collection));
+          if (response.data && response.data.nfts && response.data.nfts.length > 0) {
+            const filteredNFTs = response.data.nfts.filter(function(nft: any) {
+              return nft.image && (nft.image.cachedUrl || nft.image.originalUrl);
+            });
             
-            nfts.push(...formattedNFTs);
-            console.log(`✅ Got ${formattedNFTs.length} NFTs from ${collection.name}`);
+            const formattedNFTs = filteredNFTs.map(function(nft: any) {
+              return NFTService.formatAlchemyNFT(nft, collection);
+            });
+            
+            nfts.push.apply(nfts, formattedNFTs);
+            console.log('✅ Got ' + formattedNFTs.length + ' NFTs from ' + collection.name);
           }
         } catch (error) {
-          console.error(`Error fetching from ${collection.name}:`, error);
+          console.error('Error fetching from ' + collection.name + ':', error);
         }
       }
 
-      return this.shuffleArray(nfts).slice(0, limit);
+      return NFTService.shuffleArray(nfts).slice(0, limit);
     } catch (error) {
       console.error('Alchemy API error:', error);
       return [];
@@ -146,12 +130,13 @@ export class NFTService {
       const nfts: NFTAsset[] = [];
       
       // Use Moralis for Base chain NFTs
-      for (const collection of BASE_COLLECTIONS.slice(0, 3)) {
+      for (let i = 0; i < Math.min(BASE_COLLECTIONS.length, 3); i++) {
+        const collection = BASE_COLLECTIONS[i];
         try {
-          console.log(`Fetching from ${collection.name} via Moralis...`);
+          console.log('Fetching from ' + collection.name + ' via Moralis...');
           
           const response = await axios.get(
-            `${MORALIS_BASE_URL}/nft/${collection.address}`,
+            MORALIS_BASE_URL + '/nft/' + collection.address,
             {
               headers: {
                 'X-API-Key': MORALIS_API_KEY,
@@ -166,20 +151,24 @@ export class NFTService {
             }
           );
 
-          if (response.data?.result?.length > 0) {
-            const formattedNFTs = response.data.result
-              .filter((nft: any) => nft.normalized_metadata?.image)
-              .map((nft: any) => this.formatMoralisNFT(nft, collection));
+          if (response.data && response.data.result && response.data.result.length > 0) {
+            const filteredNFTs = response.data.result.filter(function(nft: any) {
+              return nft.normalized_metadata && nft.normalized_metadata.image;
+            });
             
-            nfts.push(...formattedNFTs);
-            console.log(`✅ Got ${formattedNFTs.length} NFTs from ${collection.name}`);
+            const formattedNFTs = filteredNFTs.map(function(nft: any) {
+              return NFTService.formatMoralisNFT(nft, collection);
+            });
+            
+            nfts.push.apply(nfts, formattedNFTs);
+            console.log('✅ Got ' + formattedNFTs.length + ' NFTs from ' + collection.name);
           }
         } catch (error) {
-          console.error(`Error fetching from ${collection.name} via Moralis:`, error);
+          console.error('Error fetching from ' + collection.name + ' via Moralis:', error);
         }
       }
 
-      return this.shuffleArray(nfts).slice(0, limit);
+      return NFTService.shuffleArray(nfts).slice(0, limit);
     } catch (error) {
       console.error('Moralis API error:', error);
       return [];
@@ -211,12 +200,16 @@ export class NFTService {
         }
       );
 
-      if (response.data?.nfts?.length > 0) {
-        const formattedNFTs = response.data.nfts
-          .filter((nft: any) => nft.image_url)
-          .map((nft: any) => this.formatOpenSeaNFT(nft));
+      if (response.data && response.data.nfts && response.data.nfts.length > 0) {
+        const filteredNFTs = response.data.nfts.filter(function(nft: any) {
+          return nft.image_url;
+        });
         
-        console.log(`✅ Got ${formattedNFTs.length} NFTs from OpenSea`);
+        const formattedNFTs = filteredNFTs.map(function(nft: any) {
+          return NFTService.formatOpenSeaNFT(nft);
+        });
+        
+        console.log('✅ Got ' + formattedNFTs.length + ' NFTs from OpenSea');
         return formattedNFTs;
       }
     } catch (error) {
@@ -228,33 +221,33 @@ export class NFTService {
 
   // Format Alchemy NFT response (your existing logic, enhanced)
   private static formatAlchemyNFT(nft: any, collection: any): NFTAsset {
-    const imageUrl = nft.image?.cachedUrl || 
-                    nft.image?.originalUrl || 
-                    nft.media?.[0]?.gateway ||
-                    nft.rawMetadata?.image;
+    const imageUrl = nft.image && nft.image.cachedUrl || 
+                    nft.image && nft.image.originalUrl || 
+                    nft.media && nft.media[0] && nft.media[0].gateway ||
+                    nft.rawMetadata && nft.rawMetadata.image;
 
     return {
       tokenId: nft.tokenId || '0',
       tokenType: nft.tokenType || 'ERC721',
-      name: nft.name || nft.title || nft.rawMetadata?.name || `${collection.name} #${nft.tokenId}`,
-      description: nft.description || nft.rawMetadata?.description || `A unique NFT from ${collection.name}`,
+      name: nft.name || nft.title || (nft.rawMetadata && nft.rawMetadata.name) || (collection.name + ' #' + nft.tokenId),
+      description: nft.description || (nft.rawMetadata && nft.rawMetadata.description) || ('A unique NFT from ' + collection.name),
       image: {
         cachedUrl: imageUrl,
-        thumbnailUrl: nft.image?.thumbnailUrl || imageUrl,
-        originalUrl: nft.image?.originalUrl || imageUrl,
+        thumbnailUrl: (nft.image && nft.image.thumbnailUrl) || imageUrl,
+        originalUrl: (nft.image && nft.image.originalUrl) || imageUrl,
       },
       contract: {
-        address: nft.contract?.address || collection.address,
-        name: nft.contract?.name || collection.name,
-        symbol: nft.contract?.symbol || 'UNKNOWN',
+        address: (nft.contract && nft.contract.address) || collection.address,
+        name: (nft.contract && nft.contract.name) || collection.name,
+        symbol: (nft.contract && nft.contract.symbol) || 'UNKNOWN',
         tokenType: nft.tokenType || 'ERC721',
       },
       metadata: nft.rawMetadata || {},
       marketplace: collection.marketplace,
-      category: this.categorizeNFT(nft),
-      rarity: this.calculateRarity(nft),
+      category: NFTService.categorizeNFT(nft),
+      rarity: NFTService.calculateRarity(nft),
       price: {
-        value: this.generateRealisticPrice(collection.marketplace),
+        value: NFTService.generateRealisticPrice(collection.marketplace),
         currency: 'ETH',
       }
     };
@@ -267,8 +260,8 @@ export class NFTService {
     return {
       tokenId: nft.token_id,
       tokenType: nft.contract_type || 'ERC721',
-      name: metadata.name || nft.name || `${collection.name} #${nft.token_id}`,
-      description: metadata.description || `A unique NFT from ${collection.name}`,
+      name: metadata.name || nft.name || (collection.name + ' #' + nft.token_id),
+      description: metadata.description || ('A unique NFT from ' + collection.name),
       image: {
         cachedUrl: metadata.image || metadata.image_url,
         thumbnailUrl: metadata.image || metadata.image_url,
@@ -280,12 +273,12 @@ export class NFTService {
         symbol: nft.symbol || 'UNKNOWN',
         tokenType: nft.contract_type || 'ERC721',
       },
-      metadata,
+      metadata: metadata,
       marketplace: collection.marketplace,
-      category: this.categorizeNFT(nft),
-      rarity: this.calculateRarity(nft),
+      category: NFTService.categorizeNFT(nft),
+      rarity: NFTService.calculateRarity(nft),
       price: {
-        value: this.generateRealisticPrice(collection.marketplace),
+        value: NFTService.generateRealisticPrice(collection.marketplace),
         currency: 'ETH',
       }
     };
@@ -296,7 +289,7 @@ export class NFTService {
     return {
       tokenId: nft.identifier || '0',
       tokenType: 'ERC721',
-      name: nft.name || `NFT #${nft.identifier}`,
+      name: nft.name || ('NFT #' + nft.identifier),
       description: nft.description || '',
       image: {
         cachedUrl: nft.image_url,
@@ -304,7 +297,7 @@ export class NFTService {
         originalUrl: nft.image_url,
       },
       contract: {
-        address: nft.contract?.toLowerCase() || '0x',
+        address: (nft.contract && nft.contract.toLowerCase()) || '0x',
         name: nft.collection || 'Unknown Collection',
         symbol: 'UNKNOWN',
         tokenType: 'ERC721',
@@ -314,28 +307,28 @@ export class NFTService {
         value: (parseFloat(nft.last_sale.total_price) / 1e18).toFixed(4),
         currency: 'ETH',
       } : {
-        value: this.generateRealisticPrice('OpenSea'),
+        value: NFTService.generateRealisticPrice('OpenSea'),
         currency: 'ETH',
       },
-      category: this.categorizeNFT(nft),
+      category: NFTService.categorizeNFT(nft),
       rarity: 'Common',
     };
   }
 
   // Categorize NFT based on metadata
   private static categorizeNFT(nft: any): string {
-    const name = nft.name?.toLowerCase() || '';
-    const description = nft.description?.toLowerCase() || '';
+    const name = (nft.name && nft.name.toLowerCase()) || '';
+    const description = (nft.description && nft.description.toLowerCase()) || '';
 
-    if (name.includes('punk') || name.includes('ape') || name.includes('avatar')) {
+    if (name.indexOf('punk') !== -1 || name.indexOf('ape') !== -1 || name.indexOf('avatar') !== -1) {
       return 'PFP';
-    } else if (name.includes('art') || description.includes('digital art')) {
+    } else if (name.indexOf('art') !== -1 || description.indexOf('digital art') !== -1) {
       return 'Digital Art';
-    } else if (name.includes('music') || name.includes('audio')) {
+    } else if (name.indexOf('music') !== -1 || name.indexOf('audio') !== -1) {
       return 'Music';
-    } else if (name.includes('domain') || name.includes('.base')) {
+    } else if (name.indexOf('domain') !== -1 || name.indexOf('.base') !== -1) {
       return 'Domain';
-    } else if (name.includes('game') || description.includes('gaming')) {
+    } else if (name.indexOf('game') !== -1 || description.indexOf('gaming') !== -1) {
       return 'Gaming';
     }
 
@@ -344,14 +337,17 @@ export class NFTService {
 
   // Calculate rarity score
   private static calculateRarity(nft: any): string {
-    const attributes = nft.rawMetadata?.attributes || nft.normalized_metadata?.attributes || [];
+    const attributes = (nft.rawMetadata && nft.rawMetadata.attributes) || 
+                     (nft.normalized_metadata && nft.normalized_metadata.attributes) || [];
     
     if (attributes.length === 0) return 'Common';
     
-    const rareAttributes = attributes.filter((attr: any) => 
-      attr.value?.toString().toLowerCase().includes('rare') ||
-      attr.value?.toString().toLowerCase().includes('legendary')
-    );
+    const rareAttributes = attributes.filter(function(attr: any) {
+      return attr.value && (
+        attr.value.toString().toLowerCase().indexOf('rare') !== -1 ||
+        attr.value.toString().toLowerCase().indexOf('legendary') !== -1
+      );
+    });
 
     if (rareAttributes.length > 1) return 'Legendary';
     if (rareAttributes.length > 0) return 'Rare';
@@ -382,10 +378,12 @@ export class NFTService {
 
   // Utility function to shuffle array
   private static shuffleArray<T>(array: T[]): T[] {
-    const shuffled = [...array];
+    const shuffled = array.slice(); // Copy array
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      const temp = shuffled[i];
+      shuffled[i] = shuffled[j];
+      shuffled[j] = temp;
     }
     return shuffled;
   }
@@ -397,46 +395,46 @@ export class NFTService {
     try {
       // Use all three of your existing APIs in parallel
       const results = await Promise.allSettled([
-        this.fetchNFTsFromAlchemy(Math.ceil(limit * 0.5)),
-        this.fetchNFTsFromMoralis(Math.ceil(limit * 0.3)),
-        this.fetchNFTsFromOpenSea(Math.ceil(limit * 0.2)),
+        NFTService.fetchNFTsFromAlchemy(Math.ceil(limit * 0.5)),
+        NFTService.fetchNFTsFromMoralis(Math.ceil(limit * 0.3)),
+        NFTService.fetchNFTsFromOpenSea(Math.ceil(limit * 0.2)),
       ]);
 
       const allNFTs: NFTAsset[] = [];
       
-      results.forEach((result, index) => {
+      results.forEach(function(result, index) {
         const sources = ['Alchemy', 'Moralis', 'OpenSea'];
         if (result.status === 'fulfilled') {
-          allNFTs.push(...result.value);
-          console.log(`✅ ${sources[index]}: ${result.value.length} NFTs`);
+          allNFTs.push.apply(allNFTs, result.value);
+          console.log('✅ ' + sources[index] + ': ' + result.value.length + ' NFTs');
         } else {
-          console.error(`❌ ${sources[index]} failed:`, result.reason);
+          console.error('❌ ' + sources[index] + ' failed:', result.reason);
         }
       });
 
       if (allNFTs.length === 0) {
         console.log('⚠️ No NFTs found from APIs, using fallback data');
-        return this.getMockFallback(limit);
+        return NFTService.getMockFallback(limit);
       }
 
       // Remove duplicates and shuffle
-      const uniqueNFTs = this.removeDuplicates(allNFTs);
-      const shuffled = this.shuffleArray(uniqueNFTs).slice(0, limit);
+      const uniqueNFTs = NFTService.removeDuplicates(allNFTs);
+      const shuffled = NFTService.shuffleArray(uniqueNFTs).slice(0, limit);
       
-      console.log(`🎯 Returning ${shuffled.length} curated NFTs`);
+      console.log('🎯 Returning ' + shuffled.length + ' curated NFTs');
       return shuffled;
 
     } catch (error) {
       console.error('Error fetching curated NFTs:', error);
-      return this.getMockFallback(limit);
+      return NFTService.getMockFallback(limit);
     }
   }
 
-  // Remove duplicate NFTs
+  // Remove duplicate NFTs (ES5 compatible)
   private static removeDuplicates(nfts: NFTAsset[]): NFTAsset[] {
     const seen = new Set();
-    return nfts.filter(nft => {
-      const key = `${nft.contract.address}-${nft.tokenId}`;
+    return nfts.filter(function(nft) {
+      const key = nft.contract.address + '-' + nft.tokenId;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -512,10 +510,22 @@ export class NFTService {
     const extended: NFTAsset[] = [];
     for (let i = 0; i < limit; i++) {
       const base = mockNFTs[i % mockNFTs.length];
+      const newTokenId = (parseInt(base.tokenId) + i).toString();
+      const newName = base.name.replace(/#\d+/, '#' + newTokenId);
+      
       extended.push({
-        ...base,
-        tokenId: (parseInt(base.tokenId) + i).toString(),
-        name: base.name.replace(/#\d+/, `#${parseInt(base.tokenId) + i}`),
+        tokenId: newTokenId,
+        tokenType: base.tokenType,
+        name: newName,
+        description: base.description,
+        image: base.image,
+        contract: base.contract,
+        metadata: base.metadata,
+        marketplace: base.marketplace,
+        price: base.price,
+        lastSale: base.lastSale,
+        category: base.category,
+        rarity: base.rarity
       });
     }
 
