@@ -1,21 +1,20 @@
-// app/api/nfts/route.ts - Clean version using only your existing APIs
+// app/api/nfts/route.ts - ES5 Compatible Version
 import { NextRequest, NextResponse } from 'next/server';
 import { NFTService } from '../../../services/nftService';
 
 // Simple cache management
 const CACHE_DURATION = 300; // 5 minutes
-const cache = new Map<string, { data: any; timestamp: number }>();
+const cache = new Map();
 
-// Cleanup old cache entries
-const cleanupCache = () => {
+// Cleanup old cache entries - ES5 compatible
+function cleanupCache() {
   const now = Date.now();
-  // Use Map.forEach() for better ES5 compatibility
-  cache.forEach((entry, key) => {
+  cache.forEach(function(entry, key) {
     if (now - entry.timestamp > CACHE_DURATION * 1000) {
       cache.delete(key);
     }
   });
-};
+}
 
 // Cleanup every 10 minutes
 setInterval(cleanupCache, 10 * 60 * 1000);
@@ -24,18 +23,19 @@ export async function GET(request: NextRequest) {
   const startTime = Date.now();
   
   try {
-    const { searchParams } = new URL(request.url);
+    const url = new URL(request.url);
+    const searchParams = url.searchParams;
     const action = searchParams.get('action') || 'curated';
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
     const contractAddress = searchParams.get('contract');
     const tokenId = searchParams.get('tokenId');
     const forceRefresh = searchParams.get('refresh') === 'true';
 
-    console.log(`🎨 NFT API Request: ${action}, limit: ${limit}`);
+    console.log('🎨 NFT API Request: ' + action + ', limit: ' + limit);
 
     switch (action) {
       case 'curated':
-        const cacheKey = `curated_${limit}`;
+        const cacheKey = 'curated_' + limit;
         const cachedEntry = cache.get(cacheKey);
         
         // Return cached data if valid and not forcing refresh
@@ -55,13 +55,15 @@ export async function GET(request: NextRequest) {
         console.log('🔄 Fetching fresh NFT data from your APIs...');
         
         // Fetch with timeout
-        const fetchTimeout = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Fetch timeout after 25 seconds')), 25000)
-        );
+        const fetchTimeout = new Promise(function(_, reject) {
+          setTimeout(function() {
+            reject(new Error('Fetch timeout after 25 seconds'));
+          }, 25000);
+        });
         
         const fetchData = NFTService.fetchCuratedNFTs(limit);
         
-        const nfts = await Promise.race([fetchData, fetchTimeout]) as any[];
+        const nfts = await Promise.race([fetchData, fetchTimeout]);
 
         if (nfts && nfts.length > 0) {
           // Update cache
@@ -70,11 +72,23 @@ export async function GET(request: NextRequest) {
             timestamp: Date.now()
           });
 
-          console.log(`✅ Successfully fetched ${nfts.length} NFTs`);
+          console.log('✅ Successfully fetched ' + nfts.length + ' NFTs');
           
-          // Count NFTs by source
-          const marketplaces = [...new Set(nfts.map(n => n.marketplace))];
-          const categories = [...new Set(nfts.map(n => n.category))];
+          // Count NFTs by source (ES5 compatible)
+          const marketplacesSet = new Set();
+          const categoriesSet = new Set();
+          
+          for (let i = 0; i < nfts.length; i++) {
+            if (nfts[i].marketplace) {
+              marketplacesSet.add(nfts[i].marketplace);
+            }
+            if (nfts[i].category) {
+              categoriesSet.add(nfts[i].category);
+            }
+          }
+          
+          const marketplaces = Array.from(marketplacesSet);
+          const categories = Array.from(categoriesSet);
           
           return NextResponse.json({
             success: true,
@@ -85,17 +99,9 @@ export async function GET(request: NextRequest) {
             source: 'live',
             stats: {
               total: nfts.length,
-              marketplaces,
-              categories,
-              apis_used: ['Alchemy', 'Moralis', 'OpenSea'].filter(api => {
-                // Check which APIs actually returned data
-                const hasAlchemy = nfts.some(n => n.contract.address);
-                const hasMoralis = nfts.some(n => n.marketplace);
-                const hasOpenSea = nfts.some(n => n.marketplace === 'OpenSea');
-                return (api === 'Alchemy' && hasAlchemy) || 
-                       (api === 'Moralis' && hasMoralis) || 
-                       (api === 'OpenSea' && hasOpenSea);
-              })
+              marketplaces: marketplaces,
+              categories: categories,
+              apis_used: ['Alchemy', 'Moralis', 'OpenSea']
             }
           });
         } else {
@@ -239,7 +245,7 @@ export async function GET(request: NextRequest) {
         const freshNFTs = await NFTService.fetchCuratedNFTs(limit);
         
         if (freshNFTs.length > 0) {
-          cache.set(`curated_${limit}`, {
+          cache.set('curated_' + limit, {
             data: freshNFTs,
             timestamp: Date.now()
           });
@@ -268,7 +274,8 @@ export async function GET(request: NextRequest) {
     console.error('❌ NFT API Error:', error);
     
     // For curated requests, always provide fallback data
-    const { searchParams } = new URL(request.url);
+    const url = new URL(request.url);
+    const searchParams = url.searchParams;
     const action = searchParams.get('action') || 'curated';
     
     if (action === 'curated') {
