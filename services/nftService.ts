@@ -5,13 +5,20 @@ const ALCHEMY_API_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY!;
 const ALCHEMY_BASE_URL = `https://base-mainnet.g.alchemy.com/nft/v3/${ALCHEMY_API_KEY}`;
 
 // Known 1/1 art platform contracts on Base
-// IMPORTANT: These are example addresses - you need to find and add real contracts!
 const BASE_ART_CONTRACTS: string[] = [
   '0x972f31D4E140F0d09b154Bb395a070ED5ee9fccA', // emmywalka on Foundation
+  // Add real contract addresses here as you discover them
+  // Use the discover-base-art.js script to find contracts
+  // Or manually search on BaseScan.org
+  
+  // Example format:
+  // '0x1234567890abcdef...', // Platform/Artist name
 ];
 
 // If no contracts are configured, log a warning
-if (BASE_ART_CONTRACTS.length === 0) {
+if (BASE_ART_CONTRACTS.length === 1) {
+  console.log('✅ Found emmywalka contract configured');
+} else if (BASE_ART_CONTRACTS.length === 0) {
   console.warn('⚠️ No art contracts configured! Add real contract addresses to BASE_ART_CONTRACTS');
 }
 
@@ -177,9 +184,10 @@ export class NFTService {
       console.log('🔎 Discovering art by metadata search...');
       
       // Query known individual artists
-      // IMPORTANT: Add real artist wallet addresses as you discover them
       const artistAddresses: string[] = [
         '0x35aEA9AEe384582c76e97a723032C8b346581BBC', // emmywalka
+        // Add artist addresses here
+        // Example: '0xArtistWalletAddress', // Artist Name
       ];
       
       if (artistAddresses.length === 0) {
@@ -358,7 +366,6 @@ export class NFTService {
     if (address.includes('76e2a96714f1681a0ac7c27816d4e71c38d44a8e')) return 'Zora';
     
     return 'Independent';
-  }
   }
   
   // Estimate price based on platform (real prices would come from marketplace APIs)
