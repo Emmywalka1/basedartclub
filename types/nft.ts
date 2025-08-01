@@ -44,8 +44,11 @@ export interface BaseNFT {
   contract: NFTContract
   metadata?: any
   marketplace?: string
+  platform?: string // Added this property
+  artist?: string // Added this property
   price?: NFTPrice
   lastSale?: NFTSale
+  isOneOfOne?: boolean // Added this property
 }
 
 export interface CollectibleNFT extends BaseNFT {
