@@ -1,12 +1,14 @@
 {
   "name": "base-art-club",
   "version": "1.0.0",
-  "description": "A Tinder-style swipe app for discovering artworks on Farcaster",
+  "description": "A Tinder-style swipe app for discovering 1/1 artworks on Base blockchain",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "discover": "node scripts/discover-base-art.js",
+    "test-api": "node scripts/test-api.js"
   },
   "dependencies": {
     "@farcaster/frame-sdk": "0.0.5",
@@ -28,7 +30,9 @@
     "miniapp",
     "art",
     "base",
-    "nft"
+    "nft",
+    "1/1",
+    "blockchain"
   ],
   "author": "Base Art Club",
   "license": "MIT"
