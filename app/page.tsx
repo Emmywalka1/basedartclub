@@ -27,6 +27,9 @@ interface BaseNFT {
   contract: NFTContract;
   metadata?: any;
   marketplace?: string;
+  platform?: string;
+  artist?: string;
+  isOneOfOne?: boolean;
   price?: {
     value: string;
     currency: string;
