@@ -1,0 +1,29 @@
+{
+  "accountAssociation": {
+    "header": "REPLACE_WITH_ACTUAL_HEADER",
+    "payload": "REPLACE_WITH_ACTUAL_PAYLOAD", 
+    "signature": "REPLACE_WITH_ACTUAL_SIGNATURE"
+  },
+  "frame": {
+    "version": "1",
+    "name": "Base Art Club",
+    "iconUrl": "https://basedartclub.vercel.app/icon.png",
+    "homeUrl": "https://basedartclub.vercel.app",
+    "splashImageUrl": "https://basedartclub.vercel.app/splash.png",
+    "splashBackgroundColor": "#0052FF",
+    "subtitle": "Discover 1/1 art on Base",
+    "description": "Swipe through curated 1/1 artworks on Base blockchain. Like, pass, or collect unique digital art from independent artists and platforms.",
+    "screenshotUrls": [
+      "https://basedartclub.vercel.app/screenshot1.png",
+      "https://basedartclub.vercel.app/screenshot2.png",
+      "https://basedartclub.vercel.app/screenshot3.png"
+    ],
+    "primaryCategory": "art-creativity",
+    "tags": ["art", "nft", "base", "1/1", "digital-art"],
+    "heroImageUrl": "https://basedartclub.vercel.app/hero.png",
+    "tagline": "Discover real 1/1 art on Base",
+    "ogTitle": "Base Art Club - Discover 1/1 Art on Base",
+    "ogDescription": "The easiest way to discover and collect unique 1/1 digital art from independent artists on Base blockchain.",
+    "ogImageUrl": "https://basedartclub.vercel.app/og.png"
+  }
+}
