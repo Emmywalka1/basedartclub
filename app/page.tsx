@@ -1,3 +1,4 @@
+// app/page.tsx - Real Data Only
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -35,6 +36,9 @@ interface BaseNFT {
 interface CollectibleNFT extends BaseNFT {
   isForSale?: boolean;
   category?: string;
+  platform?: string;
+  artist?: string;
+  isOneOfOne?: boolean;
 }
 
 interface SwipeStats {
@@ -42,14 +46,6 @@ interface SwipeStats {
   passed: number;
   collected: number;
 }
-
-const CATEGORIES = [
-  'Photography',
-  'Editions', 
-  'One-of-Ones',
-  'AI Art',
-  'Digital',
-];
 
 export default function Home() {
   const [artworks, setArtworks] = useState<CollectibleNFT[]>([]);
@@ -61,6 +57,7 @@ export default function Home() {
   const [walletConnected, setWalletConnected] = useState(false);
   const [userPoints, setUserPoints] = useState(0);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Initialize Farcaster SDK and load artworks
   useEffect(() => {
@@ -78,7 +75,7 @@ export default function Home() {
         await loadArtworks();
       } catch (error) {
         console.error('Failed to initialize app:', error);
-        setError('Failed to load artworks. Please try again.');
+        setError('Failed to load artworks. Please check your connection and try again.');
         setIsLoading(false);
       }
     };
@@ -86,13 +83,17 @@ export default function Home() {
     initializeApp();
   }, []);
 
-  const loadArtworks = async () => {
+  const loadArtworks = async (refresh = false) => {
     try {
-      setIsLoading(true);
+      if (refresh) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
       setError(null);
       
-      console.log('Fetching artworks...');
-      const response = await fetch('/api/nfts?action=curated&limit=20');
+      console.log('Fetching 1/1 artworks from Base...');
+      const response = await fetch(`/api/nfts?action=curated&limit=20${refresh ? '&refresh=true' : ''}`);
       const data = await response.json();
       
       console.log('API Response:', data);
@@ -101,91 +102,33 @@ export default function Home() {
         const collectibleNFTs: CollectibleNFT[] = data.data.map((nft: BaseNFT) => ({
           ...nft,
           isForSale: !!nft.price,
-          category: CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)],
+          category: nft.platform || 'Digital Art',
         }));
         
         setArtworks(collectibleNFTs);
         console.log('Loaded artworks:', collectibleNFTs.length);
+      } else if (data.success && data.data && data.data.length === 0) {
+        setError('No 1/1 artworks found on Base. This could be due to limited art activity or API limitations. Try refreshing or check back later.');
+        setArtworks([]);
       } else {
-        // Use mock data if API fails
-        console.log('Using mock data');
-        setArtworks(getMockArtworks());
+        setError(data.error || 'Failed to load artworks');
+        setArtworks([]);
       }
       
       setIsLoading(false);
+      setIsRefreshing(false);
     } catch (error) {
       console.error('Failed to load artworks:', error);
-      setError('Failed to load artworks. Using demo data.');
-      setArtworks(getMockArtworks());
+      setError('Network error. Please check your connection and try again.');
+      setArtworks([]);
       setIsLoading(false);
+      setIsRefreshing(false);
     }
-  };
-
-  const getMockArtworks = (): CollectibleNFT[] => {
-    return [
-      {
-        tokenId: '1',
-        tokenType: 'ERC721',
-        name: 'Digital Dreams #1',
-        description: 'A vibrant digital landscape exploring the intersection of technology and nature.',
-        image: {
-          cachedUrl: '/artwork1.jpg',
-          originalUrl: '/artwork1.jpg'
-        },
-        contract: {
-          address: '0x036721e5A681E02A730b05e2B56e9b7189f2A3F8',
-          name: 'Based Ghouls',
-          tokenType: 'ERC721'
-        },
-        isForSale: true,
-        price: { value: '0.15', currency: 'ETH' },
-        marketplace: 'OpenSea',
-        category: 'Digital'
-      },
-      {
-        tokenId: '2',
-        tokenType: 'ERC721',
-        name: 'Neon Genesis #42',
-        description: 'Cyberpunk-inspired artwork with electric blues and magentas.',
-        image: {
-          cachedUrl: '/artwork2.jpg',
-          originalUrl: '/artwork2.jpg'
-        },
-        contract: {
-          address: '0x4F89Bbe2c2C896819f246F3dce8A33F5B1aB4586',
-          name: 'Base Punks',
-          tokenType: 'ERC721'
-        },
-        isForSale: true,
-        price: { value: '0.08', currency: 'ETH' },
-        marketplace: 'Foundation',
-        category: 'AI Art'
-      },
-      {
-        tokenId: '3',
-        tokenType: 'ERC721',
-        name: 'Abstract Emotions',
-        description: 'An emotional journey through color and form.',
-        image: {
-          cachedUrl: '/artwork3.jpg',
-          originalUrl: '/artwork3.jpg'
-        },
-        contract: {
-          address: '0x1538C5c8FbE7c1F0FF63F5b3F59cbad74B41db87',
-          name: 'Base Names',
-          tokenType: 'ERC721'
-        },
-        isForSale: true,
-        price: { value: '0.25', currency: 'ETH' },
-        marketplace: 'Zora',
-        category: 'One-of-Ones'
-      },
-    ];
   };
 
   const connectWallet = useCallback(() => {
     setWalletConnected(true);
-    alert('🎉 Wallet connected! Welcome to Base Art Club.\n\nStart collecting to earn points!');
+    alert('🎉 Wallet connected! Welcome to Base Art Club.\n\nStart collecting 1/1 art to earn points!');
   }, []);
 
   const showFeedback = (message: string) => {
@@ -233,7 +176,7 @@ export default function Home() {
 
   const handleCollectArtwork = async (artwork: CollectibleNFT) => {
     if (!walletConnected) {
-      const shouldConnect = confirm('🔗 Connect wallet to collect this artwork?\n\nYou\'ll earn points and join the collector leaderboard!');
+      const shouldConnect = confirm('🔗 Connect wallet to collect this 1/1 artwork?\n\nYou\'ll earn points and support the artist!');
       if (shouldConnect) {
         connectWallet();
       }
@@ -250,7 +193,12 @@ export default function Home() {
       showFeedback('🔄 Processing...');
       
       const confirmed = confirm(
-        `🎨 Collect "${artwork.name}"\n\n💰 Price: ${artwork.price.value} ${artwork.price.currency}\n🏪 Marketplace: ${artwork.marketplace}\n📈 Category: ${artwork.category}\n\nProceed with collection?`
+        `🎨 Collect "${artwork.name}"\n\n` +
+        `👨‍🎨 Artist: ${artwork.artist || 'Unknown'}\n` +
+        `💰 Price: ${artwork.price.value} ${artwork.price.currency}\n` +
+        `🏪 Platform: ${artwork.platform || artwork.marketplace || 'Independent'}\n` +
+        `📈 Type: ${artwork.isOneOfOne ? '1/1 Original' : 'Limited Edition'}\n\n` +
+        `Proceed with collection?`
       );
       
       if (confirmed) {
@@ -260,11 +208,17 @@ export default function Home() {
           price: artwork.price,
         });
         
-        // Simulate collection process
+        // In a real implementation, this would trigger the blockchain transaction
         await new Promise(resolve => setTimeout(resolve, 2000));
         
         showFeedback('✅ Collected!');
-        alert(`🎉 Successfully collected "${artwork.name}"!\n\n✅ Added to your collection\n🏆 +10 points earned\n\n🔗 View on ${artwork.marketplace}`);
+        alert(
+          `🎉 Successfully collected "${artwork.name}"!\n\n` +
+          `✅ Added to your collection\n` +
+          `🏆 +10 points earned\n` +
+          `👨‍🎨 Supporting artist: ${artwork.artist || 'Independent Artist'}\n\n` +
+          `🔗 View on ${artwork.platform || artwork.marketplace || 'Base Explorer'}`
+        );
         
         setTimeout(() => {
           setCurrentIndex(prev => prev + 1);
@@ -282,7 +236,7 @@ export default function Home() {
     setCurrentIndex(0);
     setStats({ liked: 0, passed: 0, collected: 0 });
     setUserPoints(0);
-    loadArtworks();
+    loadArtworks(true);
   };
 
   if (isLoading) {
@@ -290,28 +244,7 @@ export default function Home() {
       <div className="app-container">
         <div className="loading">
           <div className="loading-spinner"></div>
-          <div>Loading amazing artworks from Base...</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error && artworks.length === 0) {
-    return (
-      <div className="app-container">
-        <header className="header">
-          <div className="brand-container">
-            <div className="paint-palette"></div>
-            <h1>BASE</h1>
-          </div>
-          <div className="subtitle">art club</div>
-        </header>
-        <div className="empty-stack">
-          <h3>Unable to load artworks</h3>
-          <p>{error}</p>
-          <button className="reload-button" onClick={loadArtworks}>
-            Try Again
-          </button>
+          <div>Discovering 1/1 artworks on Base blockchain...</div>
         </div>
       </div>
     );
@@ -328,7 +261,7 @@ export default function Home() {
           <h1>BASE</h1>
         </div>
         <div className="subtitle">art club</div>
-        <div className="tagline">every artwork on base, one feed.</div>
+        <div className="tagline">discover real 1/1 art on base.</div>
         
         {/* Wallet Connection Status */}
         <div className="wallet-status">
@@ -370,10 +303,30 @@ export default function Home() {
 
       {/* Main Content Area */}
       <div className="artwork-container">
-        {hasMoreArtworks && currentArtwork ? (
+        {error && !hasMoreArtworks ? (
+          <div className="empty-stack">
+            <h3>No Artworks Available</h3>
+            <p>{error}</p>
+            <button 
+              className="reload-button" 
+              onClick={() => loadArtworks(true)}
+              disabled={isRefreshing}
+            >
+              {isRefreshing ? 'Refreshing...' : 'Try Again'}
+            </button>
+            <div style={{ marginTop: '20px', fontSize: '14px', color: '#64748b' }}>
+              <p>Tips:</p>
+              <ul style={{ textAlign: 'left', marginTop: '10px' }}>
+                <li>Make sure you have the correct API keys configured</li>
+                <li>Check that Base network is accessible</li>
+                <li>1/1 art on Base is still emerging - content may be limited</li>
+              </ul>
+            </div>
+          </div>
+        ) : hasMoreArtworks && currentArtwork ? (
           <div className="artwork-card">
-            {currentArtwork.isForSale && (
-              <div className="collection-status for-sale">For Sale</div>
+            {currentArtwork.isOneOfOne && (
+              <div className="collection-status for-sale">1/1 Original</div>
             )}
             
             {/* Action Feedback */}
@@ -383,22 +336,23 @@ export default function Home() {
             
             <div className="artwork-image-container">
               <img 
-                src={currentArtwork.image.cachedUrl || currentArtwork.image.originalUrl || '/artwork1.jpg'} 
-                alt={currentArtwork.name || 'NFT'}
+                src={currentArtwork.image.cachedUrl || currentArtwork.image.originalUrl || currentArtwork.image.thumbnailUrl} 
+                alt={currentArtwork.name || 'NFT Artwork'}
                 className="artwork-image"
                 onError={(e) => {
                   console.error('Image failed to load:', e);
-                  e.currentTarget.src = '/artwork1.jpg';
+                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.parentElement!.innerHTML = '<div style="padding: 40px; text-align: center; color: #64748b;">Image unavailable</div>';
                 }}
               />
             </div>
             
             <div className="artwork-details">
               <h2 className="artwork-title">{currentArtwork.name || 'Untitled'}</h2>
-              <p className="artwork-artist">by {currentArtwork.contract.name || 'Unknown Artist'}</p>
+              <p className="artwork-artist">by {currentArtwork.artist || currentArtwork.contract.name || 'Unknown Artist'}</p>
               
-              {currentArtwork.category && (
-                <span className="artwork-category">{currentArtwork.category}</span>
+              {currentArtwork.platform && (
+                <span className="artwork-category">{currentArtwork.platform}</span>
               )}
               
               {currentArtwork.isForSale && currentArtwork.price && (
@@ -408,12 +362,12 @@ export default function Home() {
               )}
               
               <p className="artwork-description">
-                {currentArtwork.description || 'A unique digital artwork on Base blockchain.'}
+                {currentArtwork.description || 'A unique 1/1 artwork on Base blockchain.'}
               </p>
               
               <div className="artwork-metadata">
                 <div>Token #{currentArtwork.tokenId}</div>
-                <div>{currentArtwork.marketplace || 'OpenSea'}</div>
+                <div>{currentArtwork.marketplace || currentArtwork.platform || 'Base'}</div>
               </div>
             </div>
 
@@ -449,17 +403,20 @@ export default function Home() {
           </div>
         ) : (
           <div className="empty-stack">
-            <h3>🎉 You've discovered all artworks!</h3>
-            <p>Amazing work! You've explored {artworks.length} pieces in our collection.</p>
+            <h3>🎨 No More Artworks</h3>
+            <p>You've viewed all available 1/1 artworks!</p>
+            <p style={{ marginTop: '10px', fontSize: '14px', color: '#64748b' }}>
+              Discovered {artworks.length} unique pieces
+            </p>
             <button className="reload-button" onClick={resetGallery}>
-              Start Over
+              Refresh Gallery
             </button>
           </div>
         )}
       </div>
 
       {/* Progress indicator */}
-      {hasMoreArtworks && (
+      {hasMoreArtworks && artworks.length > 0 && (
         <div className="progress-container">
           <div className="progress-text">
             {currentIndex + 1} of {artworks.length}
