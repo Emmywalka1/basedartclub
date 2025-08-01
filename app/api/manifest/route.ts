@@ -1,3 +1,4 @@
+// app/api/manifest/route.ts - Real Data Only
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
@@ -8,14 +9,20 @@ export async function GET(request: NextRequest) {
   const referer = request.headers.get('referer') || '';
   const isDebugMode = referer.includes('debug') || userAgent.includes('Farcaster');
   
+  // IMPORTANT: You must generate real account association values!
+  // Visit: https://warpcast.com/~/developers/mini-apps/new
+  // 1. Enter your domain
+  // 2. Generate the signed account association
+  // 3. Replace the values below with your actual values
+  const accountAssociationConfigured = false; // Change to true after adding real values
+  
   const manifest = {
     accountAssociation: {
-      // This will need to be generated using the Farcaster Mini App Manifest Tool
-      // Visit: https://warpcast.com/~/developers/mini-apps/new
-      // Replace these placeholder values with your actual signed account association
-      header: "PLACEHOLDER_HEADER",
-      payload: "PLACEHOLDER_PAYLOAD", 
-      signature: "PLACEHOLDER_SIGNATURE"
+      // ⚠️ THESE ARE PLACEHOLDERS - YOU MUST REPLACE WITH REAL VALUES!
+      // Generate at: https://warpcast.com/~/developers/mini-apps/new
+      header: accountAssociationConfigured ? "YOUR_ACTUAL_HEADER_HERE" : "PLACEHOLDER_HEADER_NOT_CONFIGURED",
+      payload: accountAssociationConfigured ? "YOUR_ACTUAL_PAYLOAD_HERE" : "PLACEHOLDER_PAYLOAD_NOT_CONFIGURED", 
+      signature: accountAssociationConfigured ? "YOUR_ACTUAL_SIGNATURE_HERE" : "PLACEHOLDER_SIGNATURE_NOT_CONFIGURED"
     },
     frame: {
       version: "1",
@@ -24,8 +31,8 @@ export async function GET(request: NextRequest) {
       homeUrl: baseUrl,
       splashImageUrl: `${baseUrl}/splash.png`,
       splashBackgroundColor: "#0052FF",
-      subtitle: "Discover amazing art",
-      description: "Swipe through curated artworks on Base. Like, pass, or collect your favorites.",
+      subtitle: "Discover 1/1 art on Base",
+      description: "Swipe through curated 1/1 artworks on Base blockchain. Like, pass, or collect unique digital art from independent artists and platforms.",
       screenshotUrls: [
         `${baseUrl}/screenshot1.png`,
         `${baseUrl}/screenshot2.png`,
@@ -33,11 +40,11 @@ export async function GET(request: NextRequest) {
       ],
       primaryCategory: "art-creativity",
       secondaryCategory: "marketplace",
-      tags: ["art", "nft", "base", "discovery", "collect", "foundation", "opensea", "zora", "manifold"],
+      tags: ["art", "nft", "base", "1/1", "digital-art", "foundation", "zora", "manifold", "artists"],
       heroImageUrl: `${baseUrl}/hero.png`,
-      tagline: "Swipe. Discover. Collect.",
-      ogTitle: "Base Art Club - Discover Art on Base",
-      ogDescription: "The easiest way to discover and collect amazing art from Foundation, OpenSea, Zora, and Manifold on Base blockchain.",
+      tagline: "Discover real 1/1 art on Base",
+      ogTitle: "Base Art Club - Discover 1/1 Art on Base",
+      ogDescription: "The easiest way to discover and collect unique 1/1 digital art from independent artists on Base blockchain.",
       ogImageUrl: `${baseUrl}/og.png`,
       // Enhanced configuration for better embedding
       embedConfiguration: {
@@ -49,9 +56,9 @@ export async function GET(request: NextRequest) {
       // Additional metadata
       features: [
         "swipe-navigation",
-        "nft-discovery",
-        "wallet-connection",
-        "real-time-data"
+        "1/1-art-discovery",
+        "artist-support",
+        "real-blockchain-data"
       ],
       permissions: [
         "wallet_address",
@@ -59,6 +66,12 @@ export async function GET(request: NextRequest) {
       ]
     }
   };
+
+  // Warn if not configured
+  if (!accountAssociationConfigured) {
+    console.warn('⚠️ MANIFEST WARNING: Account association not configured! The app will not work in production.');
+    console.warn('Visit https://warpcast.com/~/developers/mini-apps/new to generate real values.');
+  }
 
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -72,6 +85,7 @@ export async function GET(request: NextRequest) {
   if (isDebugMode) {
     headers['X-Debug-Mode'] = 'true';
     headers['X-Frame-Options'] = 'ALLOWALL';
+    headers['X-Account-Association-Status'] = accountAssociationConfigured ? 'configured' : 'not-configured';
   }
 
   // Ensure no restrictive headers
