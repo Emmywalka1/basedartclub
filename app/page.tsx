@@ -97,8 +97,7 @@ export default function Home() {
       const data = await response.json();
       
       console.log('API Response:', data);
-      
-      if (data.success && data.data && data.data.length > 0) {
+     if (data.success && data.data && data.data.length > 0) {
         const collectibleNFTs: CollectibleNFT[] = data.data.map((nft: BaseNFT) => ({
           ...nft,
           isForSale: !!nft.price,
