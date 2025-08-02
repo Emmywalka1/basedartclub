@@ -1,4 +1,4 @@
-// services/nftService.ts - Optimized for Speed & Scale
+// services/nftService.ts - Enhanced with Moralis Integration
 import axios from 'axios';
 
 const ALCHEMY_API_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY!;
@@ -11,6 +11,7 @@ const OPENSEA_BASE_URL = 'https://api.opensea.io/api/v2';
 // Known 1/1 art platform contracts on Base
 const BASE_ART_CONTRACTS: string[] = [
   '0x972f31D4E140F0d09b154Bb395a070ED5ee9fccA', // emmywalka on Foundation
+  '0x524cab2ec69124574082676e6f654a18df49a048', // Your new contract
   // Add more contracts here as you discover them
 ];
 
@@ -259,7 +260,7 @@ export class NFTService {
     return {
       tokenId: nft.tokenId || '0',
       tokenType: nft.tokenType || 'ERC721',
-      name: nft.name || metadata.name || `emmywalka #${nft.tokenId}`,
+      name: nft.name || metadata.name || `Token #${nft.tokenId}`,
       description: nft.description || metadata.description || 'Unique 1/1 artwork on Base',
       image: {
         cachedUrl: imageUrl,
@@ -268,19 +269,172 @@ export class NFTService {
       },
       contract: {
         address: contractAddress,
-        name: nft.contract?.name || 'emmywalka Collection',
-        symbol: nft.contract?.symbol || 'EMMY',
+        name: nft.contract?.name || 'Art Collection',
+        symbol: nft.contract?.symbol || 'ART',
         tokenType: nft.tokenType || 'ERC721',
       },
       metadata: metadata,
       marketplace: this.getPlatformName(contractAddress),
       price: price, // Always has a price since it's for sale
-      artist: 'emmywalka',
+      artist: this.extractArtistFromMetadata(metadata),
       platform: this.getPlatformName(contractAddress),
       isOneOfOne: true,
       isForSale: true, // Always true for this method
     };
   }
+  
+  // NEW MORALIS METHODS - OPTION 1 IMPLEMENTATION
+  // =============================================
+  
+  // Fetch NFT data from Moralis API
+  static async fetchNFTFromMoralis(contractAddress: string, tokenId: string): Promise<any> {
+    const MORALIS_API_KEY = process.env.MORALIS_API_KEY;
+    
+    if (!MORALIS_API_KEY) {
+      console.error('Moralis API key not found');
+      return null;
+    }
+
+    try {
+      console.log(`🔍 Fetching NFT from Moralis: ${contractAddress}/${tokenId}`);
+      
+      const response = await axios.get(
+        `https://deep-index.moralis.io/api/v2.2/nft/${contractAddress}/${tokenId}`,
+        {
+          headers: {
+            'accept': 'application/json',
+            'X-API-Key': MORALIS_API_KEY,
+          },
+          params: {
+            chain: 'base',
+            format: 'decimal',
+            normalizeMetadata: true,
+          },
+          timeout: 10000,
+        }
+      );
+
+      console.log('✅ Moralis NFT data received');
+      return response.data;
+      
+    } catch (error) {
+      console.error('❌ Moralis API error:', error);
+      return null;
+    }
+  }
+
+  // Enhanced method that uses both Alchemy AND Moralis for better data
+  static async fetchEnhancedNFTMetadata(contractAddress: string, tokenId: string): Promise<NFTAsset | null> {
+    try {
+      // Try Alchemy first (faster)
+      const alchemyData = await this.fetchNFTFromAlchemy(contractAddress, tokenId);
+      
+      // Then enrich with Moralis data
+      const moralisData = await this.fetchNFTFromMoralis(contractAddress, tokenId);
+      
+      // Combine the best of both
+      return this.combineNFTData(alchemyData, moralisData, contractAddress);
+      
+    } catch (error) {
+      console.error('Error fetching enhanced metadata:', error);
+      return null;
+    }
+  }
+
+  // Helper method to fetch from Alchemy
+  private static async fetchNFTFromAlchemy(contractAddress: string, tokenId: string): Promise<any> {
+    const response = await axios.get(
+      `${ALCHEMY_BASE_URL}/getNFTMetadata`,
+      {
+        params: {
+          contractAddress,
+          tokenId,
+          refreshCache: false,
+        },
+        timeout: 8000,
+      }
+    );
+    return response.data;
+  }
+
+  // Helper to combine data from both sources
+  private static combineNFTData(alchemyData: any, moralisData: any, contractAddress: string): NFTAsset {
+    // Use the best image URL available
+    const imageUrl = alchemyData?.image?.cachedUrl ||
+                    moralisData?.normalized_metadata?.image ||
+                    alchemyData?.image?.originalUrl ||
+                    moralisData?.metadata?.image;
+
+    // Use the best metadata available
+    const name = alchemyData?.name || 
+                 moralisData?.normalized_metadata?.name || 
+                 moralisData?.name ||
+                 `Token #${alchemyData?.tokenId || moralisData?.token_id}`;
+
+    const description = alchemyData?.description || 
+                       moralisData?.normalized_metadata?.description ||
+                       moralisData?.metadata?.description ||
+                       'Unique artwork on Base';
+
+    return {
+      tokenId: alchemyData?.tokenId || moralisData?.token_id || '0',
+      tokenType: alchemyData?.tokenType || moralisData?.contract_type || 'ERC721',
+      name,
+      description,
+      image: {
+        cachedUrl: imageUrl,
+        thumbnailUrl: alchemyData?.image?.thumbnailUrl || imageUrl,
+        originalUrl: alchemyData?.image?.originalUrl || imageUrl,
+      },
+      contract: {
+        address: contractAddress,
+        name: alchemyData?.contract?.name || moralisData?.name || 'Unknown Collection',
+        symbol: alchemyData?.contract?.symbol || moralisData?.symbol || 'UNKNOWN',
+        tokenType: alchemyData?.tokenType || moralisData?.contract_type || 'ERC721',
+      },
+      metadata: {
+        ...moralisData?.metadata,
+        ...alchemyData?.metadata,
+        // Moralis normalized metadata is often cleaner
+        normalized: moralisData?.normalized_metadata,
+      },
+      marketplace: this.getPlatformName(contractAddress),
+      price: this.generateRealisticPrice(contractAddress, alchemyData?.tokenId || moralisData?.token_id),
+      artist: this.extractArtistFromMetadata(moralisData?.normalized_metadata || alchemyData?.metadata),
+      platform: this.getPlatformName(contractAddress),
+      isOneOfOne: true,
+      isForSale: true, // You'll need to check this separately
+    };
+  }
+
+  // Helper to extract artist name from metadata
+  private static extractArtistFromMetadata(metadata: any): string {
+    if (!metadata) return 'Unknown Artist';
+    
+    // Look for common artist fields
+    const artistFields = ['artist', 'creator', 'made_by', 'created_by', 'author'];
+    
+    for (const field of artistFields) {
+      if (metadata[field]) {
+        return metadata[field];
+      }
+    }
+    
+    // Look in attributes
+    if (metadata.attributes) {
+      const artistAttribute = metadata.attributes.find((attr: any) => 
+        artistFields.includes(attr.trait_type?.toLowerCase())
+      );
+      if (artistAttribute) {
+        return artistAttribute.value;
+      }
+    }
+    
+    return 'Unknown Artist';
+  }
+  
+  // END NEW MORALIS METHODS
+  // =======================
   
   // Generate realistic prices
   private static generateRealisticPrice(contractAddress: string, tokenId: string): { value: string; currency: string } {
@@ -312,11 +466,12 @@ export class NFTService {
     const address = contractAddress.toLowerCase();
     
     if (address.includes('972f31d4e140f0d09b154bb395a070ed5ee9fcca')) return 'Foundation';
+    if (address.includes('524cab2ec69124574082676e6f654a18df49a048')) return 'Independent';
     if (address.includes('3b3ee1931dc30c1957379fac9aba94d1c48a5405')) return 'Foundation';
     if (address.includes('0a1bbd59d1c3d0587ee909e41acdd83c99b19bf5')) return 'Manifold';
     if (address.includes('76e2a96714f1681a0ac7c27816d4e71c38d44a8e')) return 'Zora';
     
-    return 'Foundation'; // Default for emmywalka
+    return 'Independent'; // Default for new contracts
   }
   
   // Utility functions
