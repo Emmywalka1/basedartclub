@@ -1,4 +1,4 @@
-// app/page.tsx - Optimized for Fast Loading
+// app/page.tsx - Grid Layout with Popup
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -35,17 +35,29 @@ interface NFTAsset {
 
 export default function Home() {
   const [artworks, setArtworks] = useState<NFTAsset[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isCollecting, setIsCollecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedArtwork, setSelectedArtwork] = useState<NFTAsset | null>(null);
   const [imageCache, setImageCache] = useState<Set<string>>(new Set());
-  const [isTransitioning, setIsTransitioning] = useState(false);
   
-  // Preload next images for instant transitions
-  const preloadImages = useCallback((startIndex: number, count: number = 5) => {
-    for (let i = startIndex; i < Math.min(startIndex + count, artworks.length); i++) {
-      const artwork = artworks[i];
+  const ITEMS_PER_PAGE = 4;
+  
+  // Get current page artworks
+  const getCurrentPageArtworks = () => {
+    const startIndex = currentPage * ITEMS_PER_PAGE;
+    return artworks.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  };
+
+  // Check if there's a next page
+  const hasNextPage = () => {
+    return (currentPage + 1) * ITEMS_PER_PAGE < artworks.length;
+  };
+
+  // Preload images for better performance
+  const preloadImages = useCallback((artworksToCache: NFTAsset[]) => {
+    artworksToCache.forEach(artwork => {
       const imageUrl = artwork?.image.cachedUrl || artwork?.image.originalUrl || artwork?.image.thumbnailUrl;
       
       if (imageUrl && !imageCache.has(imageUrl)) {
@@ -59,8 +71,8 @@ export default function Home() {
         };
         img.src = imageUrl;
       }
-    }
-  }, [artworks, imageCache]);
+    });
+  }, [imageCache]);
 
   // Initialize app
   useEffect(() => {
@@ -86,16 +98,14 @@ export default function Home() {
   // Preload images when artworks change
   useEffect(() => {
     if (artworks.length > 0) {
-      preloadImages(0, 10); // Preload first 10 images
+      // Preload current page and next page
+      const currentPageArtworks = getCurrentPageArtworks();
+      const nextPageStart = (currentPage + 1) * ITEMS_PER_PAGE;
+      const nextPageArtworks = artworks.slice(nextPageStart, nextPageStart + ITEMS_PER_PAGE);
+      
+      preloadImages([...currentPageArtworks, ...nextPageArtworks]);
     }
-  }, [artworks, preloadImages]);
-
-  // Preload next images when index changes
-  useEffect(() => {
-    if (artworks.length > 0 && currentIndex >= 0) {
-      preloadImages(currentIndex + 1, 3); // Preload next 3
-    }
-  }, [currentIndex, artworks, preloadImages]);
+  }, [artworks, currentPage, preloadImages]);
 
   const loadArtworks = async () => {
     try {
@@ -103,7 +113,7 @@ export default function Home() {
       setError(null);
       
       console.log('⚡ Loading for-sale artworks...');
-      const response = await fetch('/api/nfts?action=curated&limit=20');
+      const response = await fetch('/api/nfts?action=curated&limit=40'); // Load more for pagination
       const data = await response.json();
       
       if (data.success && data.data && data.data.length > 0) {
@@ -123,18 +133,12 @@ export default function Home() {
     }
   };
 
-  const handleAction = async (action: 'pass' | 'collect') => {
-    if (isCollecting || isTransitioning) return;
-    
-    const currentArtwork = artworks[currentIndex];
-    if (!currentArtwork) return;
+  const handleArtworkClick = (artwork: NFTAsset) => {
+    setSelectedArtwork(artwork);
+  };
 
-    if (action === 'collect') {
-      await handleCollectArtwork(currentArtwork);
-    } else {
-      // Fast pass - instant transition
-      goToNext();
-    }
+  const handleClosePopup = () => {
+    setSelectedArtwork(null);
   };
 
   const handleCollectArtwork = async (artwork: NFTAsset) => {
@@ -164,7 +168,13 @@ export default function Home() {
               `💰 Paid: ${artwork.price.value} ${artwork.price.currency}\n` +
               `👨‍🎨 Supporting: ${artwork.artist}`);
         
-        goToNext();
+        // Close popup and remove from current view
+        setSelectedArtwork(null);
+        
+        // Remove collected artwork from the list
+        setArtworks(prev => prev.filter(art => 
+          !(art.contract.address === artwork.contract.address && art.tokenId === artwork.tokenId)
+        ));
       }
     } catch (error) {
       console.error('Failed to collect artwork:', error);
@@ -174,32 +184,24 @@ export default function Home() {
     }
   };
 
-  const goToNext = () => {
-    if (currentIndex < artworks.length - 1) {
-      setIsTransitioning(true);
-      setCurrentIndex(prev => prev + 1);
-      
-      // Quick transition
-      setTimeout(() => {
-        setIsTransitioning(false);
-      }, 100);
+  const handleNextPage = () => {
+    if (hasNextPage()) {
+      setCurrentPage(prev => prev + 1);
+    } else {
+      // If no more pages, load more artworks
+      loadArtworks();
     }
   };
 
-  const goToPrevious = () => {
-    if (currentIndex > 0) {
-      setIsTransitioning(true);
-      setCurrentIndex(prev => prev - 1);
-      
-      setTimeout(() => {
-        setIsTransitioning(false);
-      }, 100);
+  const handlePreviousPage = () => {
+    if (currentPage > 0) {
+      setCurrentPage(prev => prev - 1);
     }
   };
 
   if (isLoading) {
     return (
-      <div className="fullscreen-container">
+      <div className="grid-container">
         <div className="loading-center">
           <div className="loading-spinner"></div>
           <div style={{ marginTop: '16px', color: '#64748b' }}>Loading for-sale artworks...</div>
@@ -210,7 +212,7 @@ export default function Home() {
 
   if (error || artworks.length === 0) {
     return (
-      <div className="fullscreen-container">
+      <div className="grid-container">
         <div className="loading-center">
           <h3>No for-sale artworks available</h3>
           <p style={{ margin: '16px 0', textAlign: 'center', color: '#64748b' }}>
@@ -218,14 +220,7 @@ export default function Home() {
           </p>
           <button 
             onClick={loadArtworks}
-            style={{
-              padding: '12px 24px',
-              background: '#007BFF',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer'
-            }}
+            className="refresh-btn"
           >
             Refresh
           </button>
@@ -234,26 +229,16 @@ export default function Home() {
     );
   }
 
-  const currentArtwork = artworks[currentIndex];
-  const hasNext = currentIndex < artworks.length - 1;
-  const hasPrev = currentIndex > 0;
+  const currentPageArtworks = getCurrentPageArtworks();
 
-  if (!currentArtwork) {
+  if (currentPageArtworks.length === 0) {
     return (
-      <div className="fullscreen-container">
+      <div className="grid-container">
         <div className="loading-center">
           <h3>All artworks viewed!</h3>
           <button 
-            onClick={() => setCurrentIndex(0)}
-            style={{
-              marginTop: '16px',
-              padding: '12px 24px',
-              background: '#007BFF',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer'
-            }}
+            onClick={() => setCurrentPage(0)}
+            className="refresh-btn"
           >
             Start Over
           </button>
@@ -262,85 +247,115 @@ export default function Home() {
     );
   }
 
-  const imageUrl = currentArtwork.image.cachedUrl || currentArtwork.image.originalUrl || currentArtwork.image.thumbnailUrl;
-  const isImagePreloaded = imageCache.has(imageUrl || '');
-
   return (
-    <div className="fullscreen-container">
-      {/* Navigation arrows */}
-      {hasPrev && (
-        <button 
-          className="nav-arrow nav-arrow-left"
-          onClick={goToPrevious}
-          disabled={isTransitioning}
-        >
-          ←
-        </button>
-      )}
-      
-      {hasNext && (
-        <button 
-          className="nav-arrow nav-arrow-right"
-          onClick={goToNext}
-          disabled={isTransitioning}
-        >
-          →
-        </button>
-      )}
-
-      {/* Progress indicator */}
-      <div className="progress-indicator">
-        {currentIndex + 1} / {artworks.length}
+    <div className="grid-container">
+      {/* Header */}
+      <div className="grid-header">
+        <h1>🎨 Base Art Club</h1>
+        <div className="page-indicator">
+          Page {currentPage + 1} • {artworks.length} artworks
+        </div>
       </div>
 
-      {/* Price indicator - prominently displayed */}
-      <div className="price-indicator">
-        {currentArtwork.price.value} {currentArtwork.price.currency}
+      {/* Grid of artworks */}
+      <div className="artworks-grid">
+        {currentPageArtworks.map((artwork, index) => {
+          const imageUrl = artwork.image.cachedUrl || artwork.image.originalUrl || artwork.image.thumbnailUrl;
+          const isImageLoaded = imageCache.has(imageUrl || '');
+
+          return (
+            <div 
+              key={`${artwork.contract.address}-${artwork.tokenId}`}
+              className="artwork-card"
+              onClick={() => handleArtworkClick(artwork)}
+            >
+              <div className="artwork-image-container">
+                {!isImageLoaded && (
+                  <div className="grid-loading">
+                    <div className="mini-spinner"></div>
+                  </div>
+                )}
+                <img 
+                  src={imageUrl}
+                  alt={artwork.name || 'Artwork'}
+                  className="artwork-image"
+                  style={{ 
+                    opacity: isImageLoaded ? 1 : 0.3,
+                  }}
+                />
+                <div className="price-overlay">
+                  {artwork.price.value} {artwork.price.currency}
+                </div>
+              </div>
+              <div className="artwork-info">
+                <div className="artwork-name">{artwork.name || `Token #${artwork.tokenId}`}</div>
+                <div className="artwork-artist">by {artwork.artist || 'Unknown'}</div>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Main artwork display */}
-      <div className="artwork-display">
-        {!isImagePreloaded && (
-          <div className="image-loading-overlay">
-            <div className="loading-spinner"></div>
+      {/* Navigation */}
+      <div className="grid-navigation">
+        <button 
+          onClick={handlePreviousPage}
+          disabled={currentPage === 0}
+          className="nav-btn prev-btn"
+        >
+          ← Previous
+        </button>
+        
+        <button 
+          onClick={handleNextPage}
+          className="nav-btn next-btn"
+        >
+          {hasNextPage() ? 'Pass →' : 'Load More →'}
+        </button>
+      </div>
+
+      {/* Popup Modal */}
+      {selectedArtwork && (
+        <div className="popup-overlay" onClick={handleClosePopup}>
+          <div className="popup-content" onClick={(e) => e.stopPropagation()}>
+            <button 
+              className="close-btn"
+              onClick={handleClosePopup}
+            >
+              ×
+            </button>
+            
+            <div className="popup-image-container">
+              <img 
+                src={selectedArtwork.image.cachedUrl || selectedArtwork.image.originalUrl || selectedArtwork.image.thumbnailUrl}
+                alt={selectedArtwork.name || 'Artwork'}
+                className="popup-image"
+              />
+            </div>
+            
+            <div className="popup-info">
+              <h2 className="popup-title">{selectedArtwork.name || `Token #${selectedArtwork.tokenId}`}</h2>
+              <p className="popup-artist">by {selectedArtwork.artist || 'Unknown Artist'}</p>
+              <p className="popup-platform">{selectedArtwork.platform}</p>
+              
+              {selectedArtwork.description && (
+                <p className="popup-description">
+                  {selectedArtwork.description.substring(0, 200)}
+                  {selectedArtwork.description.length > 200 ? '...' : ''}
+                </p>
+              )}
+            </div>
+            
+            <button 
+              className="collect-btn-popup"
+              onClick={() => handleCollectArtwork(selectedArtwork)}
+              disabled={isCollecting}
+            >
+              {isCollecting ? 'Processing...' : `Collect (${selectedArtwork.price.value} ${selectedArtwork.price.currency})`}
+            </button>
           </div>
-        )}
-        
-        <img 
-          src={imageUrl}
-          alt={currentArtwork.name || 'Artwork'}
-          className="fullscreen-image"
-          style={{ 
-            opacity: (!isImagePreloaded || isTransitioning) ? 0.5 : 1,
-            transition: 'opacity 0.15s ease'
-          }}
-        />
-      </div>
-
-      {/* Artwork info overlay */}
-      <div className="artwork-info">
-        <div className="artwork-title">{currentArtwork.name}</div>
-        <div className="artwork-artist">by {currentArtwork.artist}</div>
-      </div>
-
-      {/* Action buttons */}
-      <div className="bottom-actions">
-        <button 
-          className="action-btn pass-btn"
-          onClick={() => handleAction('pass')}
-          disabled={isCollecting || isTransitioning}
-        >
-          Pass
-        </button>
-        
-        <button 
-          className="action-btn collect-btn"
-          onClick={() => handleAction('collect')}
-          disabled={isCollecting || isTransitioning}
-        >
-          {isCollecting ? 'Processing...' : `Collect (${currentArtwork.price.value} ${currentArtwork.price.currency})`}
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
