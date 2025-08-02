@@ -1,4 +1,4 @@
-// app/page.tsx - Real Data Only
+// app/page.tsx - Improved UX with Carousel
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -39,13 +39,9 @@ interface BaseNFT {
 interface CollectibleNFT extends BaseNFT {
   isForSale?: boolean;
   category?: string;
-  platform?: string;
-  artist?: string;
-  isOneOfOne?: boolean;
 }
 
 interface SwipeStats {
-  liked: number;
   passed: number;
   collected: number;
 }
@@ -54,7 +50,7 @@ export default function Home() {
   const [artworks, setArtworks] = useState<CollectibleNFT[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [stats, setStats] = useState<SwipeStats>({ liked: 0, passed: 0, collected: 0 });
+  const [stats, setStats] = useState<SwipeStats>({ passed: 0, collected: 0 });
   const [isCollecting, setIsCollecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [walletConnected, setWalletConnected] = useState(false);
@@ -100,7 +96,8 @@ export default function Home() {
       const data = await response.json();
       
       console.log('API Response:', data);
-     if (data.success && data.data && data.data.length > 0) {
+      
+      if (data.success && data.data && data.data.length > 0) {
         const collectibleNFTs: CollectibleNFT[] = data.data.map((nft: BaseNFT) => ({
           ...nft,
           isForSale: !!nft.price,
@@ -138,7 +135,7 @@ export default function Home() {
     setTimeout(() => setActionFeedback(null), 2000);
   };
 
-  const handleAction = async (action: 'pass' | 'like' | 'collect', artwork: CollectibleNFT) => {
+  const handleAction = async (action: 'pass' | 'collect', artwork: CollectibleNFT) => {
     if (isCollecting) return;
     
     // Update stats and points
@@ -150,11 +147,6 @@ export default function Home() {
         newStats.passed++;
         pointsEarned = 1;
         showFeedback('➡️ Passed');
-        break;
-      case 'like':
-        newStats.liked++;
-        pointsEarned = 2;
-        showFeedback('❤️ Liked!');
         break;
       case 'collect':
         newStats.collected++;
@@ -236,9 +228,18 @@ export default function Home() {
 
   const resetGallery = () => {
     setCurrentIndex(0);
-    setStats({ liked: 0, passed: 0, collected: 0 });
+    setStats({ passed: 0, collected: 0 });
     setUserPoints(0);
     loadArtworks(true);
+  };
+
+  // Carousel navigation functions
+  const goToPrevious = () => {
+    setCurrentIndex(prev => Math.max(0, prev - 1));
+  };
+
+  const goToNext = () => {
+    setCurrentIndex(prev => Math.min(artworks.length - 1, prev + 1));
   };
 
   if (isLoading) {
@@ -258,12 +259,7 @@ export default function Home() {
   return (
     <div className="app-container">
       <header className="header">
-        <div className="brand-container">
-          <div className="paint-palette"></div>
-          <h1>BASE</h1>
-        </div>
-        <div className="subtitle">art club</div>
-        <div className="tagline">discover real 1/1 art on base.</div>
+        <h1>BASE ART CLUB</h1>
         
         {/* Wallet Connection Status */}
         <div className="wallet-status">
@@ -290,16 +286,16 @@ export default function Home() {
 
       <div className="stats">
         <div className="stat">
-          <div className="stat-number">{stats.liked}</div>
-          <div className="stat-label">Liked</div>
-        </div>
-        <div className="stat">
           <div className="stat-number">{stats.collected}</div>
           <div className="stat-label">Collected</div>
         </div>
         <div className="stat">
           <div className="stat-number">{stats.passed}</div>
           <div className="stat-label">Passed</div>
+        </div>
+        <div className="stat">
+          <div className="stat-number">{artworks.length}</div>
+          <div className="stat-label">Available</div>
         </div>
       </div>
 
@@ -316,91 +312,99 @@ export default function Home() {
             >
               {isRefreshing ? 'Refreshing...' : 'Try Again'}
             </button>
-            <div style={{ marginTop: '20px', fontSize: '14px', color: '#64748b' }}>
-              <p>Tips:</p>
-              <ul style={{ textAlign: 'left', marginTop: '10px' }}>
-                <li>Make sure you have the correct API keys configured</li>
-                <li>Check that Base network is accessible</li>
-                <li>1/1 art on Base is still emerging - content may be limited</li>
-              </ul>
-            </div>
           </div>
         ) : hasMoreArtworks && currentArtwork ? (
-          <div className="artwork-card">
-            {currentArtwork.isOneOfOne && (
-              <div className="collection-status for-sale">1/1 Original</div>
-            )}
-            
-            {/* Action Feedback */}
-            {actionFeedback && (
-              <div className="action-feedback">{actionFeedback}</div>
-            )}
-            
-            <div className="artwork-image-container">
-              <img 
-                src={currentArtwork.image.cachedUrl || currentArtwork.image.originalUrl || currentArtwork.image.thumbnailUrl} 
-                alt={currentArtwork.name || 'NFT Artwork'}
-                className="artwork-image"
-                onError={(e) => {
-                  console.error('Image failed to load:', e);
-                  e.currentTarget.style.display = 'none';
-                  e.currentTarget.parentElement!.innerHTML = '<div style="padding: 40px; text-align: center; color: #64748b;">Image unavailable</div>';
-                }}
-              />
-            </div>
-            
-            <div className="artwork-details">
-              <h2 className="artwork-title">{currentArtwork.name || 'Untitled'}</h2>
-              <p className="artwork-artist">by {currentArtwork.artist || currentArtwork.contract.name || 'Unknown Artist'}</p>
+          <div className="carousel-container">
+            {/* Carousel Navigation */}
+            <div className="carousel-nav">
+              <button 
+                className="nav-button prev-button"
+                onClick={goToPrevious}
+                disabled={currentIndex === 0}
+              >
+                ←
+              </button>
               
-              {currentArtwork.platform && (
-                <span className="artwork-category">{currentArtwork.platform}</span>
-              )}
+              <span className="artwork-counter">
+                {currentIndex + 1} of {artworks.length}
+              </span>
               
-              {currentArtwork.isForSale && currentArtwork.price && (
-                <div className="artwork-price">
-                  {currentArtwork.price.value} {currentArtwork.price.currency}
-                </div>
-              )}
-              
-              <p className="artwork-description">
-                {currentArtwork.description || 'A unique 1/1 artwork on Base blockchain.'}
-              </p>
-              
-              <div className="artwork-metadata">
-                <div>Token #{currentArtwork.tokenId}</div>
-                <div>{currentArtwork.marketplace || currentArtwork.platform || 'Base'}</div>
-              </div>
+              <button 
+                className="nav-button next-button"
+                onClick={goToNext}
+                disabled={currentIndex === artworks.length - 1}
+              >
+                →
+              </button>
             </div>
 
-            {/* Action Buttons */}
-            <div className="action-buttons">
-              <button 
-                className="action-button pass-button"
-                onClick={() => handleAction('pass', currentArtwork)}
-                disabled={isCollecting}
-              >
-                <span className="button-icon">✕</span>
-                <span className="button-text">Pass</span>
-              </button>
+            <div className="artwork-card">
+              {currentArtwork.isOneOfOne && (
+                <div className="collection-status for-sale">1/1 Original</div>
+              )}
               
-              <button 
-                className="action-button like-button"
-                onClick={() => handleAction('like', currentArtwork)}
-                disabled={isCollecting}
-              >
-                <span className="button-icon">♡</span>
-                <span className="button-text">Like</span>
-              </button>
+              {/* Action Feedback */}
+              {actionFeedback && (
+                <div className="action-feedback">{actionFeedback}</div>
+              )}
               
-              <button 
-                className="action-button collect-button"
-                onClick={() => handleAction('collect', currentArtwork)}
-                disabled={isCollecting || !currentArtwork.isForSale}
-              >
-                <span className="button-icon">{isCollecting ? '⏳' : '⭐'}</span>
-                <span className="button-text">{isCollecting ? 'Processing' : 'Collect'}</span>
-              </button>
+              <div className="artwork-image-container">
+                <img 
+                  src={currentArtwork.image.cachedUrl || currentArtwork.image.originalUrl || currentArtwork.image.thumbnailUrl} 
+                  alt={currentArtwork.name || 'NFT Artwork'}
+                  className="artwork-image"
+                  onError={(e) => {
+                    console.error('Image failed to load:', e);
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.parentElement!.innerHTML = '<div style="padding: 40px; text-align: center; color: #64748b;">Image unavailable</div>';
+                  }}
+                />
+              </div>
+              
+              <div className="artwork-details">
+                <h2 className="artwork-title">{currentArtwork.name || 'Untitled'}</h2>
+                <p className="artwork-artist">by {currentArtwork.artist || currentArtwork.contract.name || 'Unknown Artist'}</p>
+                
+                {currentArtwork.platform && (
+                  <span className="artwork-category">{currentArtwork.platform}</span>
+                )}
+                
+                {currentArtwork.isForSale && currentArtwork.price && (
+                  <div className="artwork-price">
+                    {currentArtwork.price.value} {currentArtwork.price.currency}
+                  </div>
+                )}
+                
+                <p className="artwork-description">
+                  {currentArtwork.description || 'A unique 1/1 artwork on Base blockchain.'}
+                </p>
+                
+                <div className="artwork-metadata">
+                  <div>Token #{currentArtwork.tokenId}</div>
+                  <div>{currentArtwork.marketplace || currentArtwork.platform || 'Base'}</div>
+                </div>
+              </div>
+
+              {/* Action Buttons - Only Pass and Collect */}
+              <div className="action-buttons">
+                <button 
+                  className="action-button pass-button"
+                  onClick={() => handleAction('pass', currentArtwork)}
+                  disabled={isCollecting}
+                >
+                  <span className="button-icon">✕</span>
+                  <span className="button-text">Pass</span>
+                </button>
+                
+                <button 
+                  className="action-button collect-button"
+                  onClick={() => handleAction('collect', currentArtwork)}
+                  disabled={isCollecting || !currentArtwork.isForSale}
+                >
+                  <span className="button-icon">{isCollecting ? '⏳' : '⭐'}</span>
+                  <span className="button-text">{isCollecting ? 'Processing' : 'Collect'}</span>
+                </button>
+              </div>
             </div>
           </div>
         ) : (
@@ -420,9 +424,6 @@ export default function Home() {
       {/* Progress indicator */}
       {hasMoreArtworks && artworks.length > 0 && (
         <div className="progress-container">
-          <div className="progress-text">
-            {currentIndex + 1} of {artworks.length}
-          </div>
           <div className="progress-bar">
             <div 
               className="progress-fill" 
