@@ -82,7 +82,11 @@ export default function Home() {
         if (imageUrl && !preloadedImages.has(imageUrl)) {
           const img = new Image();
           img.onload = () => {
-            setPreloadedImages(prev => new Set([...prev, imageUrl]));
+            setPreloadedImages(prev => {
+              const newSet = new Set(prev);
+              newSet.add(imageUrl);
+              return newSet;
+            });
           };
           img.src = imageUrl;
         }
