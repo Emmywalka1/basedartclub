@@ -1,63 +1,75 @@
-// app/page.tsx - Minimal Full-Screen Art Display
+// app/page.tsx - Optimized for Fast Loading
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
 import { sdk } from '@farcaster/frame-sdk';
 
 // Types
-interface NFTImage {
-  cachedUrl?: string;
-  thumbnailUrl?: string;
-  originalUrl?: string;
-}
-
-interface NFTContract {
-  address: string;
-  name?: string;
-  symbol?: string;
-  tokenType: 'ERC721' | 'ERC1155';
-}
-
-interface BaseNFT {
+interface NFTAsset {
   tokenId: string;
   tokenType: 'ERC721' | 'ERC1155';
   name?: string;
   description?: string;
-  image: NFTImage;
-  contract: NFTContract;
+  image: {
+    cachedUrl?: string;
+    thumbnailUrl?: string;
+    originalUrl?: string;
+  };
+  contract: {
+    address: string;
+    name?: string;
+    symbol?: string;
+    tokenType: 'ERC721' | 'ERC1155';
+  };
   metadata?: any;
   marketplace?: string;
-  platform?: string;
-  artist?: string;
-  isOneOfOne?: boolean;
-  price?: {
+  price: {
     value: string;
     currency: string;
   };
-}
-
-interface CollectibleNFT extends BaseNFT {
-  isForSale?: boolean;
-  category?: string;
+  artist?: string;
+  platform?: string;
+  isOneOfOne?: boolean;
+  isForSale: boolean;
 }
 
 export default function Home() {
-  const [artworks, setArtworks] = useState<CollectibleNFT[]>([]);
+  const [artworks, setArtworks] = useState<NFTAsset[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isCollecting, setIsCollecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isImageLoading, setIsImageLoading] = useState(false);
-  const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set());
+  const [imageCache, setImageCache] = useState<Set<string>>(new Set());
+  const [isTransitioning, setIsTransitioning] = useState(false);
   
-  // Initialize Farcaster SDK and load artworks
+  // Preload next images for instant transitions
+  const preloadImages = useCallback((startIndex: number, count: number = 5) => {
+    for (let i = startIndex; i < Math.min(startIndex + count, artworks.length); i++) {
+      const artwork = artworks[i];
+      const imageUrl = artwork?.image.cachedUrl || artwork?.image.originalUrl || artwork?.image.thumbnailUrl;
+      
+      if (imageUrl && !imageCache.has(imageUrl)) {
+        const img = new Image();
+        img.onload = () => {
+          setImageCache(prev => {
+            const newCache = new Set(prev);
+            newCache.add(imageUrl);
+            return newCache;
+          });
+        };
+        img.src = imageUrl;
+      }
+    }
+  }, [artworks, imageCache]);
+
+  // Initialize app
   useEffect(() => {
     const initializeApp = async () => {
       try {
         try {
           await sdk.actions.ready();
         } catch (sdkError) {
-          console.log('Failed to initialize Farcaster SDK, continuing anyway');
+          console.log('Farcaster SDK init failed, continuing anyway');
         }
         
         await loadArtworks();
@@ -71,47 +83,34 @@ export default function Home() {
     initializeApp();
   }, []);
 
-  // Preload next few images
+  // Preload images when artworks change
   useEffect(() => {
-    if (artworks.length > 0 && currentIndex < artworks.length) {
-      const preloadNext = 3; // Preload next 3 images
-      for (let i = currentIndex; i < Math.min(currentIndex + preloadNext, artworks.length); i++) {
-        const artwork = artworks[i];
-        const imageUrl = artwork.image.cachedUrl || artwork.image.originalUrl || artwork.image.thumbnailUrl;
-        
-        if (imageUrl && !preloadedImages.has(imageUrl)) {
-          const img = new Image();
-          img.onload = () => {
-            setPreloadedImages(prev => {
-              const newSet = new Set(prev);
-              newSet.add(imageUrl);
-              return newSet;
-            });
-          };
-          img.src = imageUrl;
-        }
-      }
+    if (artworks.length > 0) {
+      preloadImages(0, 10); // Preload first 10 images
     }
-  }, [artworks, currentIndex, preloadedImages]);
+  }, [artworks, preloadImages]);
+
+  // Preload next images when index changes
+  useEffect(() => {
+    if (artworks.length > 0 && currentIndex >= 0) {
+      preloadImages(currentIndex + 1, 3); // Preload next 3
+    }
+  }, [currentIndex, artworks, preloadImages]);
 
   const loadArtworks = async () => {
     try {
       setIsLoading(true);
       setError(null);
       
+      console.log('⚡ Loading for-sale artworks...');
       const response = await fetch('/api/nfts?action=curated&limit=20');
       const data = await response.json();
       
       if (data.success && data.data && data.data.length > 0) {
-        const collectibleNFTs: CollectibleNFT[] = data.data.map((nft: BaseNFT) => ({
-          ...nft,
-          isForSale: !!nft.price,
-          category: nft.platform || 'Digital Art',
-        }));
-        
-        setArtworks(collectibleNFTs);
+        console.log(`✅ Loaded ${data.data.length} for-sale artworks`);
+        setArtworks(data.data);
       } else {
-        setError('No artworks found.');
+        setError('No for-sale artworks found.');
         setArtworks([]);
       }
       
@@ -125,7 +124,7 @@ export default function Home() {
   };
 
   const handleAction = async (action: 'pass' | 'collect') => {
-    if (isCollecting || isImageLoading) return;
+    if (isCollecting || isTransitioning) return;
     
     const currentArtwork = artworks[currentIndex];
     if (!currentArtwork) return;
@@ -133,29 +132,43 @@ export default function Home() {
     if (action === 'collect') {
       await handleCollectArtwork(currentArtwork);
     } else {
-      // For pass, immediately move to next
+      // Fast pass - instant transition
       goToNext();
     }
   };
 
-  const handleCollectArtwork = async (artwork: CollectibleNFT) => {
+  const handleCollectArtwork = async (artwork: NFTAsset) => {
     try {
       setIsCollecting(true);
       
       const confirmed = confirm(
-        `Collect "${artwork.name}" by ${artwork.artist || 'Unknown Artist'}?\n\nPrice: ${artwork.price?.value || 'N/A'} ${artwork.price?.currency || 'ETH'}`
+        `🎨 Collect "${artwork.name}"\n\n` +
+        `👨‍🎨 Artist: ${artwork.artist}\n` +
+        `💰 Price: ${artwork.price.value} ${artwork.price.currency}\n` +
+        `🏪 Platform: ${artwork.platform}\n\n` +
+        `Proceed with purchase?`
       );
       
       if (confirmed) {
         // Simulate transaction
+        console.log('Collecting NFT:', {
+          contract: artwork.contract.address,
+          tokenId: artwork.tokenId,
+          price: artwork.price,
+        });
+        
         await new Promise(resolve => setTimeout(resolve, 1500));
         
-        alert(`Successfully collected "${artwork.name}"!`);
+        alert(`🎉 Successfully collected "${artwork.name}"!\n\n` +
+              `✅ Added to your collection\n` +
+              `💰 Paid: ${artwork.price.value} ${artwork.price.currency}\n` +
+              `👨‍🎨 Supporting: ${artwork.artist}`);
+        
         goToNext();
       }
     } catch (error) {
       console.error('Failed to collect artwork:', error);
-      alert('Collection failed. Please try again.');
+      alert('❌ Collection failed. Please try again.');
     } finally {
       setIsCollecting(false);
     }
@@ -163,23 +176,23 @@ export default function Home() {
 
   const goToNext = () => {
     if (currentIndex < artworks.length - 1) {
-      setIsImageLoading(true);
+      setIsTransitioning(true);
       setCurrentIndex(prev => prev + 1);
       
-      // Small delay to prevent flashing
+      // Quick transition
       setTimeout(() => {
-        setIsImageLoading(false);
+        setIsTransitioning(false);
       }, 100);
     }
   };
 
   const goToPrevious = () => {
     if (currentIndex > 0) {
-      setIsImageLoading(true);
+      setIsTransitioning(true);
       setCurrentIndex(prev => prev - 1);
       
       setTimeout(() => {
-        setIsImageLoading(false);
+        setIsTransitioning(false);
       }, 100);
     }
   };
@@ -189,7 +202,7 @@ export default function Home() {
       <div className="fullscreen-container">
         <div className="loading-center">
           <div className="loading-spinner"></div>
-          <div style={{ marginTop: '16px', color: '#64748b' }}>Loading artworks...</div>
+          <div style={{ marginTop: '16px', color: '#64748b' }}>Loading for-sale artworks...</div>
         </div>
       </div>
     );
@@ -199,11 +212,13 @@ export default function Home() {
     return (
       <div className="fullscreen-container">
         <div className="loading-center">
-          <h3>No artworks available</h3>
+          <h3>No for-sale artworks available</h3>
+          <p style={{ margin: '16px 0', textAlign: 'center', color: '#64748b' }}>
+            {error || 'No artworks are currently listed for sale'}
+          </p>
           <button 
             onClick={loadArtworks}
             style={{
-              marginTop: '16px',
               padding: '12px 24px',
               background: '#007BFF',
               color: 'white',
@@ -212,7 +227,7 @@ export default function Home() {
               cursor: 'pointer'
             }}
           >
-            Retry
+            Refresh
           </button>
         </div>
       </div>
@@ -248,15 +263,16 @@ export default function Home() {
   }
 
   const imageUrl = currentArtwork.image.cachedUrl || currentArtwork.image.originalUrl || currentArtwork.image.thumbnailUrl;
+  const isImagePreloaded = imageCache.has(imageUrl || '');
 
   return (
     <div className="fullscreen-container">
-      {/* Navigation arrows - minimal and subtle */}
+      {/* Navigation arrows */}
       {hasPrev && (
         <button 
           className="nav-arrow nav-arrow-left"
           onClick={goToPrevious}
-          disabled={isImageLoading}
+          disabled={isTransitioning}
         >
           ←
         </button>
@@ -266,20 +282,25 @@ export default function Home() {
         <button 
           className="nav-arrow nav-arrow-right"
           onClick={goToNext}
-          disabled={isImageLoading}
+          disabled={isTransitioning}
         >
           →
         </button>
       )}
 
-      {/* Progress indicator - minimal */}
+      {/* Progress indicator */}
       <div className="progress-indicator">
         {currentIndex + 1} / {artworks.length}
       </div>
 
+      {/* Price indicator - prominently displayed */}
+      <div className="price-indicator">
+        {currentArtwork.price.value} {currentArtwork.price.currency}
+      </div>
+
       {/* Main artwork display */}
       <div className="artwork-display">
-        {isImageLoading && (
+        {!isImagePreloaded && (
           <div className="image-loading-overlay">
             <div className="loading-spinner"></div>
           </div>
@@ -289,24 +310,25 @@ export default function Home() {
           src={imageUrl}
           alt={currentArtwork.name || 'Artwork'}
           className="fullscreen-image"
-          onLoad={() => setIsImageLoading(false)}
-          onError={(e) => {
-            console.error('Image failed to load');
-            setIsImageLoading(false);
-          }}
           style={{ 
-            opacity: isImageLoading ? 0.3 : 1,
-            transition: 'opacity 0.2s ease'
+            opacity: (!isImagePreloaded || isTransitioning) ? 0.5 : 1,
+            transition: 'opacity 0.15s ease'
           }}
         />
       </div>
 
-      {/* Minimal action buttons at bottom */}
+      {/* Artwork info overlay */}
+      <div className="artwork-info">
+        <div className="artwork-title">{currentArtwork.name}</div>
+        <div className="artwork-artist">by {currentArtwork.artist}</div>
+      </div>
+
+      {/* Action buttons */}
       <div className="bottom-actions">
         <button 
           className="action-btn pass-btn"
           onClick={() => handleAction('pass')}
-          disabled={isCollecting || isImageLoading}
+          disabled={isCollecting || isTransitioning}
         >
           Pass
         </button>
@@ -314,24 +336,10 @@ export default function Home() {
         <button 
           className="action-btn collect-btn"
           onClick={() => handleAction('collect')}
-          disabled={isCollecting || isImageLoading || !currentArtwork.isForSale}
+          disabled={isCollecting || isTransitioning}
         >
-          {isCollecting ? 'Processing...' : 'Collect'}
+          {isCollecting ? 'Processing...' : `Collect (${currentArtwork.price.value} ${currentArtwork.price.currency})`}
         </button>
-      </div>
-
-      {/* Hidden preload images for smooth transitions */}
-      <div style={{ display: 'none' }}>
-        {artworks.slice(currentIndex + 1, currentIndex + 4).map((artwork, i) => {
-          const nextImageUrl = artwork.image.cachedUrl || artwork.image.originalUrl || artwork.image.thumbnailUrl;
-          return nextImageUrl ? (
-            <img 
-              key={`preload-${currentIndex + i + 1}`}
-              src={nextImageUrl} 
-              alt="preload"
-            />
-          ) : null;
-        })}
       </div>
     </div>
   );
