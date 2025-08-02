@@ -59,40 +59,46 @@ interface NFTAsset {
 export class NFTService {
   
   // Main function to fetch 1/1 art from Base
-  static async fetchCuratedNFTs(limit: number = 20): Promise<NFTAsset[]> {
-    console.log('🎨 Fetching real 1/1 art from Base blockchain...');
+ static async fetchCuratedNFTs(limit: number = 20): Promise<NFTAsset[]> {
+  console.log('🎨 Fetching real 1/1 art from Base blockchain...');
+  console.log(`🎯 Target limit: ${limit} artworks`);
+  
+  try {
+    const allArtworks: NFTAsset[] = [];
     
-    try {
-      const allArtworks: NFTAsset[] = [];
-      
-      // Method 1: Get recent NFT transfers/mints (catches new art)
-      const recentArt = await this.fetchRecentArtMints(Math.ceil(limit * 0.4));
-      allArtworks.push(...recentArt);
-      
-      // Method 2: Get NFTs from known art contracts
-      const contractArt = await this.fetchFromArtContracts(Math.ceil(limit * 0.3));
-      allArtworks.push(...contractArt);
-      
-      // Method 3: Search by metadata (catches art from any contract)
-      const discoveredArt = await this.discoverArtByMetadata(Math.ceil(limit * 0.3));
+    // Focus on contract NFTs first since we know they exist
+    console.log('📋 Step 1: Fetching from contracts...');
+    const contractArt = await this.fetchFromArtContracts(limit);
+    console.log(`✅ Contract fetch result: ${contractArt.length} artworks`);
+    allArtworks.push(...contractArt);
+    
+    // Only fetch from other sources if we need more
+    if (allArtworks.length < limit) {
+      console.log('📋 Step 2: Fetching from artist wallet...');
+      const discoveredArt = await this.discoverArtByMetadata(limit - allArtworks.length);
+      console.log(`✅ Artist wallet result: ${discoveredArt.length} artworks`);
       allArtworks.push(...discoveredArt);
-      
-      // Remove duplicates and filter for 1/1s
-      const uniqueArt = this.removeDuplicates(allArtworks);
-      const oneOfOnes = this.filterForOneOfOnes(uniqueArt);
-      
-      // Shuffle and limit
-      const finalArt = this.shuffleArray(oneOfOnes).slice(0, limit);
-      
-      console.log(`✅ Found ${finalArt.length} real 1/1 artworks on Base`);
-      
-      return finalArt;
-      
-    } catch (error) {
-      console.error('Error fetching 1/1 art:', error);
-      return []; // Return empty array instead of mock data
     }
+    
+    // Remove duplicates but don't filter for art (we trust emmywalka's contract)
+    const uniqueArt = this.removeDuplicates(allArtworks);
+    console.log(`🔄 After removing duplicates: ${uniqueArt.length} artworks`);
+    
+    // Shuffle and limit
+    const finalArt = this.shuffleArray(uniqueArt).slice(0, limit);
+    
+    console.log(`🎉 FINAL SUCCESS: Returning ${finalArt.length} artworks to app`);
+    finalArt.forEach((art, i) => {
+      console.log(`   ${i + 1}. "${art.name}" by ${art.artist} (${art.platform})`);
+    });
+    
+    return finalArt;
+    
+  } catch (error) {
+    console.error('❌ Error in fetchCuratedNFTs:', error);
+    return [];
   }
+}
   
   // Fetch recent NFT mints/transfers to catch new art
   private static async fetchRecentArtMints(limit: number): Promise<NFTAsset[]> {
@@ -135,48 +141,76 @@ export class NFTService {
   }
   
   // Fetch from known art platform contracts
-  private static async fetchFromArtContracts(limit: number): Promise<NFTAsset[]> {
-    try {
-      console.log('🖼️ Fetching from known art platforms on Base...');
-      
-      const nfts: NFTAsset[] = [];
-      const perContract = Math.ceil(limit / BASE_ART_CONTRACTS.length);
-      
-      for (const contractAddress of BASE_ART_CONTRACTS) {
-        try {
-          const response = await axios.get(
-            `${ALCHEMY_BASE_URL}/getNFTsForContract`,
-            {
-              params: {
-                contractAddress,
-                withMetadata: true,
-                limit: perContract * 2, // Get extra to filter
-                startToken: Math.floor(Math.random() * 100), // Random offset
-              },
-              timeout: 10000,
-            }
-          );
-          
-          if (response.data && response.data.nfts) {
-            const artworks = response.data.nfts
-              .filter((nft: any) => this.isLikelyOneOfOneArt(nft))
-              .slice(0, perContract)
-              .map((nft: any) => this.formatAlchemyNFT(nft, this.getPlatformName(contractAddress)));
-            
-            nfts.push(...artworks);
+ private static async fetchFromArtContracts(limit: number): Promise<NFTAsset[]> {
+  try {
+    console.log('🖼️ Fetching from known art platforms on Base...');
+    console.log('📋 Contracts to check:', BASE_ART_CONTRACTS);
+    
+    const nfts: NFTAsset[] = [];
+    const perContract = Math.ceil(limit / BASE_ART_CONTRACTS.length);
+    
+    for (const contractAddress of BASE_ART_CONTRACTS) {
+      try {
+        console.log(`🔍 Checking contract: ${contractAddress}`);
+        
+        const response = await axios.get(
+          `${ALCHEMY_BASE_URL}/getNFTsForContract`,
+          {
+            params: {
+              contractAddress,
+              withMetadata: true,
+              limit: Math.min(perContract * 2, 20), // Limit to prevent timeouts
+              startToken: '0', // Start from beginning
+            },
+            timeout: 15000,
           }
-        } catch (error) {
-          console.error(`Error fetching from ${contractAddress}:`, error);
+        );
+        
+        console.log(`📊 Raw API response for ${contractAddress}:`, {
+          success: !!response.data,
+          nftCount: response.data?.nfts?.length || 0,
+          totalSupply: response.data?.totalSupply || 'unknown'
+        });
+        
+        if (response.data && response.data.nfts && response.data.nfts.length > 0) {
+          console.log(`📝 First NFT sample:`, response.data.nfts[0]);
+          
+          // REMOVE STRICT FILTERING - Just take all NFTs from emmywalka's contract
+          const allContractNfts = response.data.nfts.slice(0, perContract);
+          
+          console.log(`✅ Processing ${allContractNfts.length} NFTs from emmywalka contract (no art filtering)`);
+          
+          const artworks = allContractNfts.map((nft: any) => {
+            console.log(`🎨 Processing NFT: ${nft.name || 'Untitled'} (${nft.tokenId})`);
+            return this.formatAlchemyNFT(nft, 'Foundation');
+          });
+          
+          nfts.push(...artworks);
+          console.log(`📦 Added ${artworks.length} total artworks from contract`);
+          
+          // Log what we're adding
+          artworks.forEach((artwork, i) => {
+            console.log(`   ${i + 1}. "${artwork.name}" by ${artwork.artist} (${artwork.tokenId})`);
+          });
+          
+        } else {
+          console.log(`❌ No NFTs found in contract response for ${contractAddress}`);
+          console.log('Full response:', response.data);
         }
+      } catch (error) {
+        console.error(`❌ Error fetching from ${contractAddress}:`, error);
+        console.error('Error details:', error.response?.data);
       }
-      
-      return nfts;
-      
-    } catch (error) {
-      console.error('Error fetching from art contracts:', error);
-      return [];
     }
+    
+    console.log(`🎯 FINAL RESULT: ${nfts.length} total artworks found from all contracts`);
+    return nfts;
+    
+  } catch (error) {
+    console.error('❌ Error in fetchFromArtContracts:', error);
+    return [];
   }
+}
   
   // Discover art by searching metadata across all contracts
   private static async discoverArtByMetadata(limit: number): Promise<NFTAsset[]> {
@@ -342,19 +376,15 @@ export class NFTService {
   }
   
   // Check if truly a 1/1
-  private static checkIfOneOfOne(nft: any): boolean {
-    // ERC721 is always 1/1
-    if (nft.tokenType === 'ERC721') return true;
-    
-    // For ERC1155, check supply
-    if (nft.tokenType === 'ERC1155') {
-      const balance = parseInt(nft.balance || '1');
-      const totalSupply = parseInt(nft.totalSupply || '1');
-      return balance === 1 && totalSupply === 1;
-    }
-    
-    return true; // Assume 1/1 if unsure
-  }
+ private static isLikelyOneOfOneArt(nft: any): boolean {
+  // For emmywalka's contract, just check basic requirements
+  const hasImage = !!(nft.image?.cachedUrl || nft.image?.originalUrl || nft.metadata?.image || nft.rawMetadata?.image);
+  const isERC721 = nft.tokenType === 'ERC721';
+  
+  console.log(`🔍 Art check for "${nft.name}": hasImage=${hasImage}, isERC721=${isERC721}`);
+  
+  // Very loose requirements - just needs image and be ERC721
+  return hasImage && isERC721;
   
   // Get platform name from contract address
   private static getPlatformName(contractAddress: string): string {
