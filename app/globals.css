@@ -92,7 +92,6 @@ body {
   border-radius: 8px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.1);
-  margin-bottom: 12px;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -135,11 +134,10 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.artwork-info {
+.artwork-text-below {
+  margin-top: 8px;
   text-align: center;
   width: 4cm;
-  margin-top: 0;
-  padding: 0;
 }
 
 .artwork-name {
@@ -163,6 +161,11 @@ body {
   white-space: nowrap;
   width: 100%;
   margin: 0;
+}
+
+/* Remove old artwork-info styles */
+.artwork-info {
+  display: none;
 }
 
 .grid-navigation {
@@ -646,11 +649,11 @@ body {
   .artwork-image-container {
     width: 3.5cm;
     height: 3.5cm;
-    margin-bottom: 10px;
   }
   
-  .artwork-info {
+  .artwork-text-below {
     width: 3.5cm;
+    margin-top: 6px;
   }
   
   .artwork-name {
@@ -742,11 +745,11 @@ body {
   .artwork-image-container {
     width: 3cm;
     height: 3cm;
-    margin-bottom: 8px;
   }
   
-  .artwork-info {
+  .artwork-text-below {
     width: 3cm;
+    margin-top: 5px;
   }
   
   .artwork-name {
