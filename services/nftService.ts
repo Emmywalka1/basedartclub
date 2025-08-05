@@ -441,15 +441,17 @@ export class NFTService {
       // Check if it's actually for sale with real price
       const saleStatus = await this.checkIfForSale(alchemyData || {}, contractAddress);
       
-      let finalPrice = saleStatus.price;
+      let finalPrice: { value: string; currency: string };
       let isRealPrice = false;
       
-      if (!saleStatus.isForSale || !saleStatus.price) {
+      if (saleStatus.isForSale && saleStatus.price) {
+        // Has real marketplace listing
+        finalPrice = saleStatus.price;
+        isRealPrice = true;
+      } else {
         // No real marketplace listing, use estimated price
         finalPrice = this.generateRealisticPrice(contractAddress, alchemyData?.tokenId || moralisData?.token_id);
         isRealPrice = false;
-      } else {
-        isRealPrice = true;
       }
       
       // Combine the best of both with real or estimated price
