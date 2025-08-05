@@ -257,6 +257,9 @@ export class NFTService {
     // Generate realistic price based on contract and token ID
     const price = this.generateRealisticPrice(contractAddress, nft.tokenId);
     
+    // Get proper artist name
+    const artist = this.extractArtistFromContract(contractAddress, metadata);
+    
     return {
       tokenId: nft.tokenId || '0',
       tokenType: nft.tokenType || 'ERC721',
@@ -276,7 +279,7 @@ export class NFTService {
       metadata: metadata,
       marketplace: this.getPlatformName(contractAddress),
       price: price, // Always has a price since it's for sale
-      artist: this.extractArtistFromMetadata(metadata),
+      artist: artist,
       platform: this.getPlatformName(contractAddress),
       isOneOfOne: true,
       isForSale: true, // Always true for this method
@@ -376,6 +379,14 @@ export class NFTService {
                        moralisData?.metadata?.description ||
                        'Unique artwork on Base';
 
+    // Enhanced metadata combining both sources
+    const combinedMetadata = {
+      ...moralisData?.metadata,
+      ...alchemyData?.metadata,
+      // Moralis normalized metadata is often cleaner
+      normalized: moralisData?.normalized_metadata,
+    };
+
     return {
       tokenId: alchemyData?.tokenId || moralisData?.token_id || '0',
       tokenType: alchemyData?.tokenType || moralisData?.contract_type || 'ERC721',
@@ -392,15 +403,10 @@ export class NFTService {
         symbol: alchemyData?.contract?.symbol || moralisData?.symbol || 'UNKNOWN',
         tokenType: alchemyData?.tokenType || moralisData?.contract_type || 'ERC721',
       },
-      metadata: {
-        ...moralisData?.metadata,
-        ...alchemyData?.metadata,
-        // Moralis normalized metadata is often cleaner
-        normalized: moralisData?.normalized_metadata,
-      },
+      metadata: combinedMetadata,
       marketplace: this.getPlatformName(contractAddress),
       price: this.generateRealisticPrice(contractAddress, alchemyData?.tokenId || moralisData?.token_id),
-      artist: this.extractArtistFromMetadata(moralisData?.normalized_metadata || alchemyData?.metadata),
+      artist: this.extractArtistFromContract(contractAddress, combinedMetadata),
       platform: this.getPlatformName(contractAddress),
       isOneOfOne: true,
       isForSale: true, // You'll need to check this separately
@@ -431,6 +437,63 @@ export class NFTService {
     }
     
     return 'Unknown Artist';
+  }
+
+  // Enhanced artist extraction based on contract address
+  private static extractArtistFromContract(contractAddress: string, metadata: any): string {
+    const address = contractAddress.toLowerCase();
+    
+    // Known artists by contract address
+    if (address === '0x972f31d4e140f0d09b154bb395a070ed5ee9fcca') {
+      return 'emmywalka';
+    }
+    
+    if (address === '0x524cab2ec69124574082676e6f654a18df49a048') {
+      // Try to extract from metadata first, fallback to known info
+      const extractedArtist = this.extractArtistFromMetadata(metadata);
+      return extractedArtist !== 'Unknown Artist' ? extractedArtist : 'Base Artist';
+    }
+    
+    // For other contracts, try metadata extraction
+    const extractedArtist = this.extractArtistFromMetadata(metadata);
+    if (extractedArtist !== 'Unknown Artist') {
+      return extractedArtist;
+    }
+    
+    // Look for creator in contract name
+    if (metadata.name && metadata.name.includes('by ')) {
+      const parts = metadata.name.split('by ');
+      if (parts.length > 1) {
+        return parts[1].trim();
+      }
+    }
+    
+    // Look for artist in description
+    if (metadata.description) {
+      const desc = metadata.description.toLowerCase();
+      const byMatch = desc.match(/by\s+([a-zA-Z0-9_\-\.]+)/);
+      if (byMatch) {
+        return byMatch[1];
+      }
+      
+      const createdMatch = desc.match(/created\s+by\s+([a-zA-Z0-9_\-\.]+)/);
+      if (createdMatch) {
+        return createdMatch[1];
+      }
+    }
+    
+    // Default based on platform
+    const platform = this.getPlatformName(contractAddress);
+    switch (platform) {
+      case 'Foundation':
+        return 'Foundation Artist';
+      case 'Zora':
+        return 'Zora Creator';
+      case 'Manifold':
+        return 'Independent Artist';
+      default:
+        return 'Base Creator';
+    }
   }
   
   // END NEW MORALIS METHODS
