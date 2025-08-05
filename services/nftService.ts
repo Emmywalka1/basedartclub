@@ -49,16 +49,16 @@ interface NFTAsset {
 
 export class NFTService {
   
-  // Main function - optimized for speed
+  // Main function - now fetches REAL marketplace data
   static async fetchCuratedNFTs(limit: number = 20): Promise<NFTAsset[]> {
-    console.log('⚡ Fast-fetching for-sale artworks...');
+    console.log('⚡ Fast-fetching REAL for-sale artworks from marketplaces...');
     
-    const cacheKey = `for-sale-nfts-${limit}`;
+    const cacheKey = `real-for-sale-nfts-${limit}`;
     const cached = NFT_CACHE.get(cacheKey);
     
     // Return cached data if fresh
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-      console.log('⚡ Returning cached for-sale artworks');
+      console.log('⚡ Returning cached REAL for-sale artworks');
       return cached.data;
     }
     
@@ -74,11 +74,21 @@ export class NFTService {
       results.forEach((result, index) => {
         if (result.status === 'fulfilled') {
           allArtworks.push(...result.value);
-          console.log(`✅ Contract ${index + 1}: ${result.value.length} for-sale items`);
+          console.log(`✅ Contract ${index + 1}: ${result.value.length} REAL for-sale items`);
         } else {
           console.error(`❌ Contract ${index + 1} failed:`, result.reason);
         }
       });
+      
+      if (allArtworks.length === 0) {
+        console.log('⚠️ No real marketplace listings found.');
+        console.log('💡 This means:');
+        console.log('   - No NFTs are currently listed for sale on supported marketplaces');
+        console.log('   - OpenSea, Foundation, or Zora APIs may be unavailable');
+        console.log('   - The contracts may not have active listings');
+        console.log('   - Check your API keys: OpenSea, Foundation access');
+        return [];
+      }
       
       // Remove duplicates and shuffle
       const uniqueArt = this.removeDuplicates(allArtworks);
@@ -90,19 +100,19 @@ export class NFTService {
         timestamp: Date.now()
       });
       
-      console.log(`⚡ SUCCESS: ${finalArt.length} for-sale artworks loaded`);
+      console.log(`⚡ SUCCESS: ${finalArt.length} REAL for-sale artworks loaded with marketplace prices`);
       return finalArt;
       
     } catch (error) {
-      console.error('❌ Error fetching for-sale NFTs:', error);
+      console.error('❌ Error fetching REAL for-sale NFTs:', error);
       return [];
     }
   }
   
-  // Fast contract fetching with for-sale filtering
+  // Fast contract fetching with REAL for-sale filtering
   private static async fetchContractForSaleNFTs(contractAddress: string, limit: number): Promise<NFTAsset[]> {
     try {
-      console.log(`⚡ Checking ${contractAddress} for for-sale items...`);
+      console.log(`⚡ Checking ${contractAddress} for REAL for-sale items...`);
       
       // Get NFTs from contract
       const response = await axios.get(
@@ -111,10 +121,10 @@ export class NFTService {
           params: {
             contractAddress,
             withMetadata: true,
-            limit: Math.min(limit * 3, 30), // Get extra to filter
+            limit: Math.min(limit * 5, 50), // Get more since many won't be for sale
             startToken: '0',
           },
-          timeout: 8000, // Faster timeout
+          timeout: 8000,
         }
       );
       
@@ -123,19 +133,20 @@ export class NFTService {
         return [];
       }
       
-      console.log(`📊 Found ${response.data.nfts.length} total NFTs, filtering for for-sale...`);
+      console.log(`📊 Found ${response.data.nfts.length} total NFTs, checking REAL marketplace listings...`);
+      console.log('🔍 Checking: OpenSea, Foundation, Zora APIs for live prices...');
       
-      // Process in batches for better performance
+      // Process in smaller batches to avoid rate limits
       const forSaleNFTs: NFTAsset[] = [];
-      const batchSize = 5;
+      const batchSize = 3; // Smaller batches for API calls
       
       for (let i = 0; i < response.data.nfts.length && forSaleNFTs.length < limit; i += batchSize) {
         const batch = response.data.nfts.slice(i, i + batchSize);
         
         const batchPromises = batch.map(async (nft: any) => {
-          const isForSale = await this.checkIfForSale(nft, contractAddress);
-          if (isForSale) {
-            return this.formatForSaleNFT(nft, contractAddress);
+          const saleStatus = await this.checkIfForSale(nft, contractAddress);
+          if (saleStatus.isForSale && saleStatus.price) {
+            return this.formatForSaleNFT(nft, contractAddress, saleStatus.price);
           }
           return null;
         });
@@ -147,9 +158,14 @@ export class NFTService {
             forSaleNFTs.push(result.value);
           }
         });
+
+        // Add delay between batches to respect API rate limits
+        if (i + batchSize < response.data.nfts.length) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
       
-      console.log(`🛒 Found ${forSaleNFTs.length} for-sale items from ${contractAddress}`);
+      console.log(`🛒 Found ${forSaleNFTs.length} REAL for-sale items from ${contractAddress}`);
       return forSaleNFTs;
       
     } catch (error) {
@@ -158,50 +174,66 @@ export class NFTService {
     }
   }
   
-  // Fast for-sale check
-  private static async checkIfForSale(nft: any, contractAddress: string): Promise<boolean> {
+  // Fast for-sale check with REAL price fetching
+  private static async checkIfForSale(nft: any, contractAddress: string): Promise<{ isForSale: boolean; price?: { value: string; currency: string } }> {
     try {
-      // Method 1: Check OpenSea API if available
+      // Method 1: Check OpenSea API for real listings
       if (OPENSEA_API_KEY) {
-        const isListedOnOpenSea = await this.checkOpenSeaListing(contractAddress, nft.tokenId);
-        if (isListedOnOpenSea) return true;
+        const openSeaListing = await this.checkOpenSeaListing(contractAddress, nft.tokenId);
+        if (openSeaListing.isListed && openSeaListing.price) {
+          return {
+            isForSale: true,
+            price: openSeaListing.price
+          };
+        }
       }
       
-      // Method 2: Check for Foundation listings (emmywalka's contract)
+      // Method 2: Check Foundation API for real listings
       if (contractAddress.toLowerCase() === '0x972f31d4e140f0d09b154bb395a070ed5ee9fcca') {
-        // Foundation-specific logic
-        return this.checkFoundationListing(nft);
+        const foundationListing = await this.checkFoundationListing(contractAddress, nft.tokenId);
+        if (foundationListing.isListed && foundationListing.price) {
+          return {
+            isForSale: true,
+            price: foundationListing.price
+          };
+        }
       }
       
-      // Method 3: Check metadata for sale indicators
+      // Method 3: Check Zora API for real listings
+      const zoraListing = await this.checkZoraListing(contractAddress, nft.tokenId);
+      if (zoraListing.isListed && zoraListing.price) {
+        return {
+          isForSale: true,
+          price: zoraListing.price
+        };
+      }
+      
+      // Method 4: Check metadata for sale indicators with price
       const metadata = nft.metadata || nft.rawMetadata || {};
       
-      // Look for sale indicators in metadata
-      const saleIndicators = [
-        'for_sale', 'listing', 'price', 'sale_price', 
-        'marketplace', 'available', 'listed'
-      ];
+      if (metadata.listing_price || metadata.sale_price || metadata.price) {
+        const priceValue = metadata.listing_price || metadata.sale_price || metadata.price;
+        return {
+          isForSale: true,
+          price: {
+            value: priceValue.toString(),
+            currency: 'ETH'
+          }
+        };
+      }
       
-      const hasIndicator = saleIndicators.some(indicator => 
-        metadata[indicator] || nft[indicator]
-      );
-      
-      if (hasIndicator) return true;
-      
-      // Method 4: Temporary - show alternating NFTs as for sale for demo
-      // Remove this when you have real marketplace integration
-      const tokenId = parseInt(nft.tokenId || '0');
-      return tokenId % 2 === 0; // Show every other NFT as "for sale"
+      // If no real price data found, not for sale
+      return { isForSale: false };
       
     } catch (error) {
       console.error('Error checking for-sale status:', error);
-      return false;
+      return { isForSale: false };
     }
   }
   
-  // Check OpenSea for listings
-  private static async checkOpenSeaListing(contractAddress: string, tokenId: string): Promise<boolean> {
-    if (!OPENSEA_API_KEY) return false;
+  // Check OpenSea for real listings with prices
+  private static async checkOpenSeaListing(contractAddress: string, tokenId: string): Promise<{ isListed: boolean; price?: { value: string; currency: string } }> {
+    if (!OPENSEA_API_KEY) return { isListed: false };
     
     try {
       const response = await axios.get(
@@ -221,31 +253,90 @@ export class NFTService {
         }
       );
       
-      return response.data?.orders?.length > 0;
+      if (response.data?.orders?.length > 0) {
+        const listing = response.data.orders[0];
+        const price = listing.current_price;
+        
+        if (price) {
+          // Convert from wei to ETH
+          const ethPrice = (parseFloat(price) / Math.pow(10, 18)).toFixed(4);
+          return {
+            isListed: true,
+            price: {
+              value: ethPrice,
+              currency: 'ETH'
+            }
+          };
+        }
+      }
+      
+      return { isListed: false };
     } catch (error) {
       console.error('OpenSea API error:', error);
-      return false;
+      return { isListed: false };
+    }
+  }
+
+  // Check Foundation for real listings with prices
+  private static async checkFoundationListing(contractAddress: string, tokenId: string): Promise<{ isListed: boolean; price?: { value: string; currency: string } }> {
+    try {
+      // Foundation API endpoint for getting NFT details
+      const response = await axios.get(
+        `https://api.foundation.app/v1/artworks/${contractAddress}/${tokenId}`,
+        {
+          timeout: 5000,
+        }
+      );
+      
+      if (response.data?.marketplace?.reserve_price || response.data?.marketplace?.buy_now_price) {
+        const price = response.data.marketplace.buy_now_price || response.data.marketplace.reserve_price;
+        return {
+          isListed: true,
+          price: {
+            value: (parseFloat(price) / Math.pow(10, 18)).toFixed(4),
+            currency: 'ETH'
+          }
+        };
+      }
+      
+      return { isListed: false };
+    } catch (error) {
+      console.error('Foundation API error:', error);
+      return { isListed: false };
+    }
+  }
+
+  // Check Zora for real listings with prices
+  private static async checkZoraListing(contractAddress: string, tokenId: string): Promise<{ isListed: boolean; price?: { value: string; currency: string } }> {
+    try {
+      // Zora API endpoint
+      const response = await axios.get(
+        `https://api.zora.co/v1/tokens/${contractAddress}/${tokenId}`,
+        {
+          timeout: 5000,
+        }
+      );
+      
+      if (response.data?.market?.status === 'ACTIVE' && response.data?.market?.current_price) {
+        const price = response.data.market.current_price;
+        return {
+          isListed: true,
+          price: {
+            value: (parseFloat(price) / Math.pow(10, 18)).toFixed(4),
+            currency: 'ETH'
+          }
+        };
+      }
+      
+      return { isListed: false };
+    } catch (error) {
+      console.error('Zora API error:', error);
+      return { isListed: false };
     }
   }
   
-  // Check Foundation for listings
-  private static checkFoundationListing(nft: any): boolean {
-    // Foundation-specific logic
-    // Look for Foundation marketplace indicators
-    const metadata = nft.metadata || nft.rawMetadata || {};
-    
-    // Check for Foundation-specific fields
-    if (metadata.foundation_listing || metadata.auction || metadata.reserve_price) {
-      return true;
-    }
-    
-    // For demo: assume emmywalka's newer pieces are for sale
-    const tokenId = parseInt(nft.tokenId || '0');
-    return tokenId > 0; // Assume all minted pieces are potentially for sale
-  }
-  
-  // Format NFT with guaranteed price
-  private static formatForSaleNFT(nft: any, contractAddress: string): NFTAsset {
+  // Format NFT with REAL price data
+  private static formatForSaleNFT(nft: any, contractAddress: string, realPrice: { value: string; currency: string }): NFTAsset {
     const metadata = nft.metadata || nft.rawMetadata || {};
     const imageUrl = nft.image?.cachedUrl || 
                     nft.image?.thumbnailUrl ||
@@ -253,9 +344,6 @@ export class NFTService {
                     metadata.image ||
                     metadata.image_url ||
                     nft.media?.[0]?.gateway;
-    
-    // Generate realistic price based on contract and token ID
-    const price = this.generateRealisticPrice(contractAddress, nft.tokenId);
     
     // Get proper artist name
     const artist = this.extractArtistFromContract(contractAddress, metadata);
@@ -278,11 +366,11 @@ export class NFTService {
       },
       metadata: metadata,
       marketplace: this.getPlatformName(contractAddress),
-      price: price, // Always has a price since it's for sale
+      price: realPrice, // REAL price from marketplace
       artist: artist,
       platform: this.getPlatformName(contractAddress),
       isOneOfOne: true,
-      isForSale: true, // Always true for this method
+      isForSale: true, // Always true since we only call this for confirmed listings
     };
   }
   
@@ -335,8 +423,16 @@ export class NFTService {
       // Then enrich with Moralis data
       const moralisData = await this.fetchNFTFromMoralis(contractAddress, tokenId);
       
-      // Combine the best of both
-      return this.combineNFTData(alchemyData, moralisData, contractAddress);
+      // Check if it's actually for sale with real price
+      const saleStatus = await this.checkIfForSale(alchemyData || {}, contractAddress);
+      
+      if (!saleStatus.isForSale || !saleStatus.price) {
+        console.log(`NFT ${contractAddress}/${tokenId} is not currently for sale`);
+        return null;
+      }
+      
+      // Combine the best of both with real price
+      return this.combineNFTData(alchemyData, moralisData, contractAddress, saleStatus.price);
       
     } catch (error) {
       console.error('Error fetching enhanced metadata:', error);
@@ -360,8 +456,8 @@ export class NFTService {
     return response.data;
   }
 
-  // Helper to combine data from both sources
-  private static combineNFTData(alchemyData: any, moralisData: any, contractAddress: string): NFTAsset {
+  // Helper to combine data from both sources with REAL prices
+  private static combineNFTData(alchemyData: any, moralisData: any, contractAddress: string, realPrice: { value: string; currency: string }): NFTAsset {
     // Use the best image URL available
     const imageUrl = alchemyData?.image?.cachedUrl ||
                     moralisData?.normalized_metadata?.image ||
@@ -405,11 +501,11 @@ export class NFTService {
       },
       metadata: combinedMetadata,
       marketplace: this.getPlatformName(contractAddress),
-      price: this.generateRealisticPrice(contractAddress, alchemyData?.tokenId || moralisData?.token_id),
+      price: realPrice, // REAL price from marketplace
       artist: this.extractArtistFromContract(contractAddress, combinedMetadata),
       platform: this.getPlatformName(contractAddress),
       isOneOfOne: true,
-      isForSale: true, // You'll need to check this separately
+      isForSale: true, // Always true since we only call this with confirmed real prices
     };
   }
 
@@ -498,31 +594,6 @@ export class NFTService {
   
   // END NEW MORALIS METHODS
   // =======================
-  
-  // Generate realistic prices
-  private static generateRealisticPrice(contractAddress: string, tokenId: string): { value: string; currency: string } {
-    const platform = this.getPlatformName(contractAddress);
-    
-    // Base prices by platform
-    const basePrices: Record<string, [number, number]> = {
-      'Foundation': [0.05, 0.3],   // 0.05 - 0.3 ETH
-      'Zora': [0.01, 0.1],         // 0.01 - 0.1 ETH  
-      'Manifold': [0.02, 0.15],    // 0.02 - 0.15 ETH
-      'Independent': [0.01, 0.08], // 0.01 - 0.08 ETH
-    };
-    
-    const [min, max] = basePrices[platform] || [0.01, 0.08];
-    
-    // Add some deterministic variance based on tokenId
-    const tokenNum = parseInt(tokenId) || 1;
-    const seed = (tokenNum * 37) % 100; // Deterministic but varied
-    const price = min + (max - min) * (seed / 100);
-    
-    return {
-      value: price.toFixed(4),
-      currency: 'ETH'
-    };
-  }
   
   // Get platform name from contract address
   private static getPlatformName(contractAddress: string): string {
