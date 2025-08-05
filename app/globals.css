@@ -95,7 +95,7 @@ body {
   border-radius: 8px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.1);
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .artwork-image {
@@ -139,13 +139,14 @@ body {
 .artwork-info {
   text-align: center;
   width: 100%;
+  padding-top: 4px;
 }
 
 .artwork-name {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: white;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
   line-height: 1.2;
   max-width: 4cm;
   overflow: hidden;
@@ -154,8 +155,8 @@ body {
 }
 
 .artwork-artist {
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.8);
   font-weight: 500;
   max-width: 4cm;
   overflow: hidden;
@@ -644,15 +645,17 @@ body {
   .artwork-image-container {
     width: 3.5cm;
     height: 3.5cm;
+    margin-bottom: 14px;
   }
   
   .artwork-name {
-    font-size: 11px;
+    font-size: 12px;
     max-width: 3.5cm;
+    margin-bottom: 3px;
   }
   
   .artwork-artist {
-    font-size: 9px;
+    font-size: 10px;
     max-width: 3.5cm;
   }
   
@@ -729,6 +732,7 @@ body {
   .artwork-image-container {
     width: 3cm;
     height: 3cm;
+    margin-bottom: 12px;
   }
   
   .popup-image-container {
