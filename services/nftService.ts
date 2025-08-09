@@ -12,12 +12,12 @@ const OPENSEA_BASE_URL = 'https://api.opensea.io/api/v2';
 const BASE_ART_CONTRACTS: string[] = [
   '0x972f31D4E140F0d09b154Bb395a070ED5ee9fccA', // emmywalka on Foundation
   '0x524cab2ec69124574082676e6f654a18df49a048', // Your new contract
-  // juujuumama contracts
-  '0x58FD65a42D33F080543b5f98A1Cfa9fBCe9FbB4A', // juujuumama
-  '0xd3963E400cF668BFD082Ae2Cd5E10a399aAcd839', // juujuumama
-  '0x8E7326Fc4ff10C50058F5a46f65E2d6E070B9310', // juujuumama
-  '0xf740F7C0c479F5aE21eA7e1f017cb371584d4B38', // juujuumama
-  '0xe5cDb17069e1c4622A6101dB985DaaF004e14F79', // juujuumama
+  // juujuumama contracts (only working ones with images)
+  '0x58FD65a42D33F080543b5f98A1Cfa9fBCe9FbB4A', // juujuumama - Video/MP4 art
+  '0xd3963E400cF668BFD082Ae2Cd5E10a399aAcd839', // juujuumama - Pearl + Bone collection
+  // Note: Removed 0x8E7326Fc4ff10C50058F5a46f65E2d6E070B9310 (no images)
+  // Note: Removed 0xf740F7C0c479F5aE21eA7e1f017cb371584d4B38 (no NFTs)
+  // Note: Removed 0xe5cDb17069e1c4622A6101dB985DaaF004e14F79 (no NFTs)
   // Add more contracts here as you discover them
 ];
 
@@ -195,10 +195,22 @@ export class NFTService {
   // Fast for-sale check with REAL price fetching
   private static async checkIfForSale(nft: any, contractAddress: string): Promise<{ isForSale: boolean; price?: { value: string; currency: string } }> {
     try {
+      const lowerAddress = contractAddress.toLowerCase();
+      
+      // Define known contract addresses
+      const foundationContracts = ['0x972f31d4e140f0d09b154bb395a070ed5ee9fcca'];
+      const juujuumamaContracts = [
+        '0x58fd65a42d33f080543b5f98a1cfa9fbce9fbb4a',
+        '0xd3963e400cf668bfd082ae2cd5e10a399aacd839'
+      ];
+      const zoraContracts = []; // Add Zora-specific contracts here if known
+      
       // Method 1: Check OpenSea API for real listings
-      if (OPENSEA_API_KEY) {
+      // Check OpenSea for all contracts, but especially juujuumama
+      if (OPENSEA_API_KEY && (juujuumamaContracts.includes(lowerAddress) || !foundationContracts.includes(lowerAddress))) {
         const openSeaListing = await this.checkOpenSeaListing(contractAddress, nft.tokenId);
         if (openSeaListing.isListed && openSeaListing.price) {
+          console.log(`💰 OpenSea listing found for ${nft.name || nft.tokenId}`);
           return {
             isForSale: true,
             price: openSeaListing.price
@@ -206,10 +218,11 @@ export class NFTService {
         }
       }
       
-      // Method 2: Check Foundation API for real listings
-      if (contractAddress.toLowerCase() === '0x972f31d4e140f0d09b154bb395a070ed5ee9fcca') {
+      // Method 2: Check Foundation API for Foundation contracts
+      if (foundationContracts.includes(lowerAddress)) {
         const foundationListing = await this.checkFoundationListing(contractAddress, nft.tokenId);
         if (foundationListing.isListed && foundationListing.price) {
+          console.log(`💰 Foundation listing found for ${nft.name || nft.tokenId}`);
           return {
             isForSale: true,
             price: foundationListing.price
@@ -217,27 +230,54 @@ export class NFTService {
         }
       }
       
-      // Method 3: Check Zora API for real listings
-      const zoraListing = await this.checkZoraListing(contractAddress, nft.tokenId);
-      if (zoraListing.isListed && zoraListing.price) {
-        return {
-          isForSale: true,
-          price: zoraListing.price
-        };
+      // Method 3: Check Zora API for all contracts (Zora is open to all)
+      // Prioritize for juujuumama contracts as they might list there
+      if (juujuumamaContracts.includes(lowerAddress) || zoraContracts.includes(lowerAddress)) {
+        const zoraListing = await this.checkZoraListing(contractAddress, nft.tokenId);
+        if (zoraListing.isListed && zoraListing.price) {
+          console.log(`💰 Zora listing found for ${nft.name || nft.tokenId}`);
+          return {
+            isForSale: true,
+            price: zoraListing.price
+          };
+        }
       }
       
       // Method 4: Check metadata for sale indicators with price
+      // Especially important for juujuumama contracts which might have custom metadata
       const metadata = nft.metadata || nft.rawMetadata || {};
       
-      if (metadata.listing_price || metadata.sale_price || metadata.price) {
-        const priceValue = metadata.listing_price || metadata.sale_price || metadata.price;
-        return {
-          isForSale: true,
-          price: {
-            value: priceValue.toString(),
-            currency: 'ETH'
-          }
-        };
+      // For juujuumama contracts, also check additional price fields
+      if (juujuumamaContracts.includes(lowerAddress)) {
+        const priceValue = metadata.listing_price || 
+                          metadata.sale_price || 
+                          metadata.price ||
+                          metadata.currentPrice ||
+                          metadata.buyNowPrice ||
+                          metadata.reservePrice;
+                          
+        if (priceValue) {
+          console.log(`💰 Metadata price found for juujuumama NFT: ${priceValue}`);
+          return {
+            isForSale: true,
+            price: {
+              value: priceValue.toString(),
+              currency: 'ETH'
+            }
+          };
+        }
+      } else {
+        // Standard metadata check for other contracts
+        if (metadata.listing_price || metadata.sale_price || metadata.price) {
+          const priceValue = metadata.listing_price || metadata.sale_price || metadata.price;
+          return {
+            isForSale: true,
+            price: {
+              value: priceValue.toString(),
+              currency: 'ETH'
+            }
+          };
+        }
       }
       
       // If no real price data found, not for sale
@@ -327,20 +367,41 @@ export class NFTService {
   // Check Zora for real listings with prices
   private static async checkZoraListing(contractAddress: string, tokenId: string): Promise<{ isListed: boolean; price?: { value: string; currency: string } }> {
     try {
-      // Zora API endpoint
+      // Zora's new API endpoint (no key required)
+      // Using their market API v2 which is more reliable
       const response = await axios.get(
-        `https://api.zora.co/v1/tokens/${contractAddress}/${tokenId}`,
+        `https://api.zora.co/discover/tokens/base/${contractAddress}/${tokenId}`,
         {
           timeout: 5000,
+          headers: {
+            'Accept': 'application/json',
+          }
         }
       );
       
-      if (response.data?.market?.status === 'ACTIVE' && response.data?.market?.current_price) {
-        const price = response.data.market.current_price;
+      // Check if there's an active market/sale
+      if (response.data?.token?.market?.price?.amount) {
+        const price = response.data.token.market.price;
+        const ethPrice = price.amount?.eth || price.amount?.raw;
+        
+        if (ethPrice) {
+          return {
+            isListed: true,
+            price: {
+              value: ethPrice.toString(),
+              currency: price.currency || 'ETH'
+            }
+          };
+        }
+      }
+      
+      // Alternative: Check for ask/listing price
+      if (response.data?.markets?.askPrice) {
+        const askPrice = response.data.markets.askPrice;
         return {
           isListed: true,
           price: {
-            value: (parseFloat(price) / Math.pow(10, 18)).toFixed(4),
+            value: (parseFloat(askPrice) / Math.pow(10, 18)).toFixed(4),
             currency: 'ETH'
           }
         };
@@ -348,6 +409,31 @@ export class NFTService {
       
       return { isListed: false };
     } catch (error) {
+      // Try alternative Zora endpoint as fallback
+      try {
+        const fallbackResponse = await axios.get(
+          `https://api.zora.co/v2/base/tokens/${contractAddress}:${tokenId}`,
+          {
+            timeout: 5000,
+            headers: {
+              'Accept': 'application/json',
+            }
+          }
+        );
+        
+        if (fallbackResponse.data?.sale?.price) {
+          return {
+            isListed: true,
+            price: {
+              value: (parseFloat(fallbackResponse.data.sale.price) / Math.pow(10, 18)).toFixed(4),
+              currency: 'ETH'
+            }
+          };
+        }
+      } catch (fallbackError) {
+        // Silently fail for fallback
+      }
+      
       console.error('Zora API error:', error);
       return { isListed: false };
     }
@@ -356,17 +442,51 @@ export class NFTService {
   // Format NFT with real or estimated price data
   private static formatForSaleNFT(nft: any, contractAddress: string, price: { value: string; currency: string }, isRealPrice: boolean = false): NFTAsset {
     const metadata = nft.metadata || nft.rawMetadata || {};
-    const imageUrl = nft.image?.cachedUrl || 
-                    nft.image?.thumbnailUrl ||
-                    nft.image?.originalUrl ||
-                    nft.image?.pngUrl ||  // Added for PNG URLs
-                    nft.media?.[0]?.gateway ||
-                    nft.media?.[0]?.raw ||  // Added for raw IPFS links
-                    nft.media?.[0]?.thumbnail ||  // Added for thumbnails
-                    metadata.image ||
-                    metadata.image_url ||
-                    metadata.imageUrl ||  // Added alternative format
-                    metadata.animation_url;  // Added for animated art
+    
+    // Determine the content type
+    const contentType = nft.image?.contentType || '';
+    const isVideo = contentType.includes('video') || contentType.includes('mp4') || contentType.includes('webm');
+    const isGif = contentType.includes('gif');
+    
+    // For video content (MP4, WebM), prefer PNG preview, otherwise use cached/thumbnail
+    // For GIFs, use the cached version to maintain animation
+    let imageUrl: string | undefined;
+    
+    if (isVideo) {
+      // For videos, use PNG preview or thumbnail for better performance
+      imageUrl = nft.image?.pngUrl ||  // PNG preview of video
+                nft.image?.thumbnailUrl ||  // Thumbnail version
+                nft.image?.cachedUrl ||  // Cached version
+                nft.image?.originalUrl;  // Original video (fallback)
+      
+      console.log(`📹 Video NFT detected (${nft.tokenId}), using PNG preview`);
+    } else if (isGif) {
+      // For GIFs, prefer cached version to maintain animation
+      imageUrl = nft.image?.cachedUrl ||  // Cached animated GIF
+                nft.image?.originalUrl ||  // Original GIF
+                nft.image?.thumbnailUrl ||  // Thumbnail (may lose animation)
+                nft.image?.pngUrl;  // PNG (will lose animation)
+      
+      console.log(`🎞️ GIF NFT detected (${nft.tokenId}), preserving animation`);
+    } else {
+      // For static images (PNG, JPG, etc.)
+      imageUrl = nft.image?.cachedUrl ||  // Prefer cached version
+                nft.image?.thumbnailUrl ||
+                nft.image?.pngUrl ||  // PNG version if available
+                nft.image?.originalUrl ||  // Original image
+                nft.media?.[0]?.gateway ||
+                nft.media?.[0]?.raw ||
+                nft.media?.[0]?.thumbnail ||
+                metadata.image ||
+                metadata.image_url ||
+                metadata.imageUrl ||
+                metadata.animation_url;
+    }
+    
+    // Log for debugging
+    if (!imageUrl && nft.tokenId) {
+      console.log(`⚠️ No image found for token ${nft.tokenId} in contract ${contractAddress}`);
+    }
     
     // Get proper artist name
     const artist = this.extractArtistFromContract(contractAddress, metadata);
@@ -492,22 +612,55 @@ export class NFTService {
 
   // Helper to combine data from both sources with real or estimated prices
   private static combineNFTData(alchemyData: any, moralisData: any, contractAddress: string, price: { value: string; currency: string }, isRealPrice: boolean = false): NFTAsset {
-    // Use the best image URL available - check all possible locations
-    const imageUrl = alchemyData?.image?.cachedUrl ||
-                    alchemyData?.image?.thumbnailUrl ||
-                    alchemyData?.image?.originalUrl ||
-                    alchemyData?.image?.pngUrl ||
-                    alchemyData?.media?.[0]?.gateway ||
-                    alchemyData?.media?.[0]?.raw ||
-                    alchemyData?.media?.[0]?.thumbnail ||
-                    moralisData?.normalized_metadata?.image ||
-                    moralisData?.metadata?.image ||
-                    moralisData?.metadata?.image_url ||
-                    moralisData?.metadata?.imageUrl ||
-                    moralisData?.metadata?.animation_url ||
-                    alchemyData?.metadata?.image ||
-                    alchemyData?.metadata?.image_url ||
-                    alchemyData?.metadata?.animation_url;
+    // Determine content type from Alchemy data
+    const contentType = alchemyData?.image?.contentType || '';
+    const isVideo = contentType.includes('video') || contentType.includes('mp4') || contentType.includes('webm');
+    const isGif = contentType.includes('gif');
+    
+    // Use the best image URL available - handle different media types
+    let imageUrl: string | undefined;
+    
+    if (isVideo && alchemyData?.image) {
+      // For videos, prefer PNG preview or thumbnail for better performance
+      imageUrl = alchemyData.image.pngUrl ||  // PNG preview of video
+                alchemyData.image.thumbnailUrl ||  // Thumbnail
+                alchemyData.image.cachedUrl ||  // Cached version
+                alchemyData.image.originalUrl;  // Original video (fallback)
+      
+      console.log(`📹 Video content detected, using PNG preview`);
+    } else if (isGif && alchemyData?.image) {
+      // For GIFs, prefer cached version to maintain animation
+      imageUrl = alchemyData.image.cachedUrl ||  // Cached animated GIF
+                alchemyData.image.originalUrl ||  // Original GIF
+                alchemyData.image.thumbnailUrl ||  // Thumbnail (may lose animation)
+                alchemyData.image.pngUrl;  // PNG (will lose animation)
+      
+      console.log(`🎞️ GIF content detected, preserving animation`);
+    } else {
+      // For static images and other content - check all possible locations
+      imageUrl = alchemyData?.image?.cachedUrl ||
+                alchemyData?.image?.thumbnailUrl ||
+                alchemyData?.image?.originalUrl ||
+                alchemyData?.image?.pngUrl ||
+                alchemyData?.media?.[0]?.gateway ||
+                alchemyData?.media?.[0]?.raw ||
+                alchemyData?.media?.[0]?.thumbnail ||
+                moralisData?.normalized_metadata?.image ||
+                moralisData?.metadata?.image ||
+                moralisData?.metadata?.image_url ||
+                moralisData?.metadata?.imageUrl ||
+                moralisData?.metadata?.animation_url ||
+                alchemyData?.metadata?.image ||
+                alchemyData?.metadata?.image_url ||
+                alchemyData?.metadata?.animation_url;
+    }
+    
+    // Log for debugging if no image found
+    if (!imageUrl) {
+      console.log(`⚠️ No image found for NFT in contract ${contractAddress}`);
+      console.log('Available Alchemy data:', alchemyData?.image);
+      console.log('Available Moralis data:', moralisData?.metadata);
+    }
 
     // Use the best metadata available
     const name = alchemyData?.name || 
