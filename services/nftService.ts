@@ -12,6 +12,12 @@ const OPENSEA_BASE_URL = 'https://api.opensea.io/api/v2';
 const BASE_ART_CONTRACTS: string[] = [
   '0x972f31D4E140F0d09b154Bb395a070ED5ee9fccA', // emmywalka on Foundation
   '0x524cab2ec69124574082676e6f654a18df49a048', // Your new contract
+  // juujuumama contracts
+  '0x58FD65a42D33F080543b5f98A1Cfa9fBCe9FbB4A', // juujuumama
+  '0xd3963E400cF668BFD082Ae2Cd5E10a399aAcd839', // juujuumama
+  '0x8E7326Fc4ff10C50058F5a46f65E2d6E070B9310', // juujuumama
+  '0xf740F7C0c479F5aE21eA7e1f017cb371584d4B38', // juujuumama
+  '0xe5cDb17069e1c4622A6101dB985DaaF004e14F79', // juujuumama
   // Add more contracts here as you discover them
 ];
 
@@ -566,6 +572,15 @@ export class NFTService {
     // Known artists by contract address
     if (address === '0x972f31d4e140f0d09b154bb395a070ed5ee9fcca') {
       return 'emmywalka';
+    }
+    
+    // juujuumama contracts
+    if (address === '0x58fd65a42d33f080543b5f98a1cfa9fbce9fbb4a' ||
+        address === '0xd3963e400cf668bfd082ae2cd5e10a399aacd839' ||
+        address === '0x8e7326fc4ff10c50058f5a46f65e2d6e070b9310' ||
+        address === '0xf740f7c0c479f5ae21ea7e1f017cb371584d4b38' ||
+        address === '0xe5cdb17069e1c4622a6101db985daaf004e14f79') {
+      return 'juujuumama';
     }
     
     if (address === '0x524cab2ec69124574082676e6f654a18df49a048') {
