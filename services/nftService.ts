@@ -203,7 +203,7 @@ export class NFTService {
         '0x58fd65a42d33f080543b5f98a1cfa9fbce9fbb4a',
         '0xd3963e400cf668bfd082ae2cd5e10a399aacd839'
       ];
-      const zoraContracts = []; // Add Zora-specific contracts here if known
+      const zoraContracts: string[] = []; // Add Zora-specific contracts here if known
       
       // Method 1: Check OpenSea API for real listings
       // Check OpenSea for all contracts, but especially juujuumama
