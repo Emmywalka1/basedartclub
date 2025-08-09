@@ -359,9 +359,14 @@ export class NFTService {
     const imageUrl = nft.image?.cachedUrl || 
                     nft.image?.thumbnailUrl ||
                     nft.image?.originalUrl ||
+                    nft.image?.pngUrl ||  // Added for PNG URLs
+                    nft.media?.[0]?.gateway ||
+                    nft.media?.[0]?.raw ||  // Added for raw IPFS links
+                    nft.media?.[0]?.thumbnail ||  // Added for thumbnails
                     metadata.image ||
                     metadata.image_url ||
-                    nft.media?.[0]?.gateway;
+                    metadata.imageUrl ||  // Added alternative format
+                    metadata.animation_url;  // Added for animated art
     
     // Get proper artist name
     const artist = this.extractArtistFromContract(contractAddress, metadata);
@@ -487,11 +492,22 @@ export class NFTService {
 
   // Helper to combine data from both sources with real or estimated prices
   private static combineNFTData(alchemyData: any, moralisData: any, contractAddress: string, price: { value: string; currency: string }, isRealPrice: boolean = false): NFTAsset {
-    // Use the best image URL available
+    // Use the best image URL available - check all possible locations
     const imageUrl = alchemyData?.image?.cachedUrl ||
-                    moralisData?.normalized_metadata?.image ||
+                    alchemyData?.image?.thumbnailUrl ||
                     alchemyData?.image?.originalUrl ||
-                    moralisData?.metadata?.image;
+                    alchemyData?.image?.pngUrl ||
+                    alchemyData?.media?.[0]?.gateway ||
+                    alchemyData?.media?.[0]?.raw ||
+                    alchemyData?.media?.[0]?.thumbnail ||
+                    moralisData?.normalized_metadata?.image ||
+                    moralisData?.metadata?.image ||
+                    moralisData?.metadata?.image_url ||
+                    moralisData?.metadata?.imageUrl ||
+                    moralisData?.metadata?.animation_url ||
+                    alchemyData?.metadata?.image ||
+                    alchemyData?.metadata?.image_url ||
+                    alchemyData?.metadata?.animation_url;
 
     // Use the best metadata available
     const name = alchemyData?.name || 
