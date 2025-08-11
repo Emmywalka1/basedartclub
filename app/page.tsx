@@ -1,4 +1,5 @@
-// app/page.tsx - Grid Layout with Search and Popup
+// app/page.tsx - COMPLETE FILE WITH GRID, POPUP, AND SEARCH
+// This has ALL features: Grid Layout + Popup + Search
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -34,62 +35,64 @@ interface NFTAsset {
 }
 
 export default function Home() {
-  const [allArtworks, setAllArtworks] = useState<NFTAsset[]>([]);
-  const [filteredArtworks, setFilteredArtworks] = useState<NFTAsset[]>([]);
+  // Original states
+  const [artworks, setArtworks] = useState<NFTAsset[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isCollecting, setIsCollecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedArtwork, setSelectedArtwork] = useState<NFTAsset | null>(null);
   const [imageCache, setImageCache] = useState<Set<string>>(new Set());
+  
+  // NEW: Search-related states
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [filteredArtworks, setFilteredArtworks] = useState<NFTAsset[]>([]);
   const [availableArtists, setAvailableArtists] = useState<string[]>([]);
   const [showArtistList, setShowArtistList] = useState(false);
   
   const ITEMS_PER_PAGE = 4;
   
-  // Get current page artworks
+  // Get current page artworks - NOW USES filteredArtworks
   const getCurrentPageArtworks = () => {
     const startIndex = currentPage * ITEMS_PER_PAGE;
     return filteredArtworks.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   };
 
-  // Check if there's a next page
+  // Check if there's a next page - NOW USES filteredArtworks
   const hasNextPage = () => {
     return (currentPage + 1) * ITEMS_PER_PAGE < filteredArtworks.length;
   };
 
-  // Filter artworks by search term
+  // NEW: Filter artworks by search term
   const handleSearch = useCallback((term: string) => {
     setSearchTerm(term);
     setCurrentPage(0); // Reset to first page when searching
     
     if (!term.trim()) {
-      setFilteredArtworks(allArtworks);
+      setFilteredArtworks(artworks);
       setIsSearching(false);
     } else {
       setIsSearching(true);
-      // Simple filter by artist name
       const search = term.toLowerCase().trim();
-      const filtered = allArtworks.filter(nft => {
+      const filtered = artworks.filter(nft => {
         const artist = (nft.artist || '').toLowerCase();
         return artist.includes(search);
       });
       setFilteredArtworks(filtered);
     }
-  }, [allArtworks]);
+  }, [artworks]);
 
-  // Clear search
+  // NEW: Clear search
   const clearSearch = () => {
     setSearchTerm('');
-    setFilteredArtworks(allArtworks);
+    setFilteredArtworks(artworks);
     setIsSearching(false);
     setCurrentPage(0);
     setShowArtistList(false);
   };
 
-  // Handle artist selection from list
+  // NEW: Handle artist selection from list
   const selectArtist = (artist: string) => {
     handleSearch(artist);
     setShowArtistList(false);
@@ -135,26 +138,25 @@ export default function Home() {
     initializeApp();
   }, []);
 
-  // Update filtered artworks when all artworks change
+  // NEW: Update filtered artworks when all artworks change
   useEffect(() => {
     if (!isSearching) {
-      setFilteredArtworks(allArtworks);
+      setFilteredArtworks(artworks);
     }
     
     // Get unique artists
     const artists = new Set<string>();
-    allArtworks.forEach(nft => {
+    artworks.forEach(nft => {
       if (nft.artist && nft.artist !== 'Unknown Artist') {
         artists.add(nft.artist);
       }
     });
     setAvailableArtists(Array.from(artists).sort());
-  }, [allArtworks, isSearching]);
+  }, [artworks, isSearching]);
 
   // Preload images when artworks change
   useEffect(() => {
     if (filteredArtworks.length > 0) {
-      // Preload current page and next page
       const currentPageArtworks = getCurrentPageArtworks();
       const nextPageStart = (currentPage + 1) * ITEMS_PER_PAGE;
       const nextPageArtworks = filteredArtworks.slice(nextPageStart, nextPageStart + ITEMS_PER_PAGE);
@@ -169,22 +171,22 @@ export default function Home() {
       setError(null);
       
       console.log('⚡ Loading for-sale artworks...');
-      const response = await fetch('/api/nfts?action=curated&limit=40'); // Load more for pagination
+      const response = await fetch('/api/nfts?action=curated&limit=40');
       const data = await response.json();
       
       if (data.success && data.data && data.data.length > 0) {
         console.log(`✅ Loaded ${data.data.length} for-sale artworks`);
-        setAllArtworks(data.data);
+        setArtworks(data.data);
       } else {
         setError('No for-sale artworks found.');
-        setAllArtworks([]);
+        setArtworks([]);
       }
       
       setIsLoading(false);
     } catch (error) {
       console.error('Failed to load artworks:', error);
       setError('Failed to load artworks.');
-      setAllArtworks([]);
+      setArtworks([]);
       setIsLoading(false);
     }
   };
@@ -210,7 +212,6 @@ export default function Home() {
       );
       
       if (confirmed) {
-        // Simulate transaction
         console.log('Collecting NFT:', {
           contract: artwork.contract.address,
           tokenId: artwork.tokenId,
@@ -224,11 +225,9 @@ export default function Home() {
               `💰 Paid: ${artwork.price.value} ${artwork.price.currency}\n` +
               `👨‍🎨 Supporting: ${artwork.artist}`);
         
-        // Close popup and remove from current view
         setSelectedArtwork(null);
         
-        // Remove collected artwork from the list
-        setAllArtworks(prev => prev.filter(art => 
+        setArtworks(prev => prev.filter(art => 
           !(art.contract.address === artwork.contract.address && art.tokenId === artwork.tokenId)
         ));
       }
@@ -244,7 +243,6 @@ export default function Home() {
     if (hasNextPage()) {
       setCurrentPage(prev => prev + 1);
     } else if (!isSearching) {
-      // If no more pages and not searching, load more artworks
       loadArtworks();
     }
   };
@@ -266,7 +264,7 @@ export default function Home() {
     );
   }
 
-  if (error || allArtworks.length === 0) {
+  if (error || artworks.length === 0) {
     return (
       <div className="grid-container">
         <div className="loading-center">
@@ -290,15 +288,14 @@ export default function Home() {
   if (currentPageArtworks.length === 0 && isSearching) {
     return (
       <div className="grid-container">
-        {/* Header */}
         <div className="grid-header">
           <h1>🎨 Base Art Club</h1>
           <div className="page-indicator">
-            {allArtworks.length} artworks
+            {filteredArtworks.length} artworks found
           </div>
         </div>
 
-        {/* Search Section */}
+        {/* SEARCH SECTION */}
         <div className="search-section">
           <div className="search-container">
             <input
@@ -369,9 +366,10 @@ export default function Home() {
     );
   }
 
+  // MAIN RETURN WITH ALL FEATURES: HEADER + SEARCH + GRID + POPUP
   return (
     <div className="grid-container">
-      {/* Header */}
+      {/* HEADER - ORIGINAL */}
       <div className="grid-header">
         <h1>🎨 Base Art Club</h1>
         <div className="page-indicator">
@@ -380,7 +378,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Search Section */}
+      {/* SEARCH SECTION - NEW ADDITION */}
       <div className="search-section">
         <div className="search-container">
           <input
@@ -419,7 +417,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* Grid of artworks */}
+      {/* GRID OF ARTWORKS - ORIGINAL, STILL HERE! */}
       <div className="artworks-grid">
         {currentPageArtworks.map((artwork, index) => {
           const imageUrl = artwork.image.cachedUrl || artwork.image.originalUrl || artwork.image.thumbnailUrl;
@@ -458,7 +456,7 @@ export default function Home() {
         })}
       </div>
 
-      {/* Navigation */}
+      {/* NAVIGATION - ORIGINAL */}
       <div className="grid-navigation">
         <button 
           onClick={handlePreviousPage}
@@ -476,7 +474,7 @@ export default function Home() {
         </button>
       </div>
 
-      {/* Popup Modal */}
+      {/* POPUP MODAL - ORIGINAL, STILL HERE! */}
       {selectedArtwork && (
         <div className="popup-overlay" onClick={handleClosePopup}>
           <div className="popup-content" onClick={(e) => e.stopPropagation()}>
