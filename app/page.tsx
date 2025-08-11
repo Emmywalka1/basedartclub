@@ -1,4 +1,4 @@
-// app/page.tsx - Grid Layout with Popup
+// app/page.tsx - Grid Layout with Search and Popup
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -34,25 +34,65 @@ interface NFTAsset {
 }
 
 export default function Home() {
-  const [artworks, setArtworks] = useState<NFTAsset[]>([]);
+  const [allArtworks, setAllArtworks] = useState<NFTAsset[]>([]);
+  const [filteredArtworks, setFilteredArtworks] = useState<NFTAsset[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isCollecting, setIsCollecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedArtwork, setSelectedArtwork] = useState<NFTAsset | null>(null);
   const [imageCache, setImageCache] = useState<Set<string>>(new Set());
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [availableArtists, setAvailableArtists] = useState<string[]>([]);
+  const [showArtistList, setShowArtistList] = useState(false);
   
   const ITEMS_PER_PAGE = 4;
   
   // Get current page artworks
   const getCurrentPageArtworks = () => {
     const startIndex = currentPage * ITEMS_PER_PAGE;
-    return artworks.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    return filteredArtworks.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   };
 
   // Check if there's a next page
   const hasNextPage = () => {
-    return (currentPage + 1) * ITEMS_PER_PAGE < artworks.length;
+    return (currentPage + 1) * ITEMS_PER_PAGE < filteredArtworks.length;
+  };
+
+  // Filter artworks by search term
+  const handleSearch = useCallback((term: string) => {
+    setSearchTerm(term);
+    setCurrentPage(0); // Reset to first page when searching
+    
+    if (!term.trim()) {
+      setFilteredArtworks(allArtworks);
+      setIsSearching(false);
+    } else {
+      setIsSearching(true);
+      // Simple filter by artist name
+      const search = term.toLowerCase().trim();
+      const filtered = allArtworks.filter(nft => {
+        const artist = (nft.artist || '').toLowerCase();
+        return artist.includes(search);
+      });
+      setFilteredArtworks(filtered);
+    }
+  }, [allArtworks]);
+
+  // Clear search
+  const clearSearch = () => {
+    setSearchTerm('');
+    setFilteredArtworks(allArtworks);
+    setIsSearching(false);
+    setCurrentPage(0);
+    setShowArtistList(false);
+  };
+
+  // Handle artist selection from list
+  const selectArtist = (artist: string) => {
+    handleSearch(artist);
+    setShowArtistList(false);
   };
 
   // Preload images for better performance
@@ -95,17 +135,33 @@ export default function Home() {
     initializeApp();
   }, []);
 
+  // Update filtered artworks when all artworks change
+  useEffect(() => {
+    if (!isSearching) {
+      setFilteredArtworks(allArtworks);
+    }
+    
+    // Get unique artists
+    const artists = new Set<string>();
+    allArtworks.forEach(nft => {
+      if (nft.artist && nft.artist !== 'Unknown Artist') {
+        artists.add(nft.artist);
+      }
+    });
+    setAvailableArtists(Array.from(artists).sort());
+  }, [allArtworks, isSearching]);
+
   // Preload images when artworks change
   useEffect(() => {
-    if (artworks.length > 0) {
+    if (filteredArtworks.length > 0) {
       // Preload current page and next page
       const currentPageArtworks = getCurrentPageArtworks();
       const nextPageStart = (currentPage + 1) * ITEMS_PER_PAGE;
-      const nextPageArtworks = artworks.slice(nextPageStart, nextPageStart + ITEMS_PER_PAGE);
+      const nextPageArtworks = filteredArtworks.slice(nextPageStart, nextPageStart + ITEMS_PER_PAGE);
       
       preloadImages([...currentPageArtworks, ...nextPageArtworks]);
     }
-  }, [artworks, currentPage, preloadImages]);
+  }, [filteredArtworks, currentPage, preloadImages]);
 
   const loadArtworks = async () => {
     try {
@@ -118,17 +174,17 @@ export default function Home() {
       
       if (data.success && data.data && data.data.length > 0) {
         console.log(`✅ Loaded ${data.data.length} for-sale artworks`);
-        setArtworks(data.data);
+        setAllArtworks(data.data);
       } else {
         setError('No for-sale artworks found.');
-        setArtworks([]);
+        setAllArtworks([]);
       }
       
       setIsLoading(false);
     } catch (error) {
       console.error('Failed to load artworks:', error);
       setError('Failed to load artworks.');
-      setArtworks([]);
+      setAllArtworks([]);
       setIsLoading(false);
     }
   };
@@ -172,7 +228,7 @@ export default function Home() {
         setSelectedArtwork(null);
         
         // Remove collected artwork from the list
-        setArtworks(prev => prev.filter(art => 
+        setAllArtworks(prev => prev.filter(art => 
           !(art.contract.address === artwork.contract.address && art.tokenId === artwork.tokenId)
         ));
       }
@@ -187,8 +243,8 @@ export default function Home() {
   const handleNextPage = () => {
     if (hasNextPage()) {
       setCurrentPage(prev => prev + 1);
-    } else {
-      // If no more pages, load more artworks
+    } else if (!isSearching) {
+      // If no more pages and not searching, load more artworks
       loadArtworks();
     }
   };
@@ -210,7 +266,7 @@ export default function Home() {
     );
   }
 
-  if (error || artworks.length === 0) {
+  if (error || allArtworks.length === 0) {
     return (
       <div className="grid-container">
         <div className="loading-center">
@@ -230,6 +286,72 @@ export default function Home() {
   }
 
   const currentPageArtworks = getCurrentPageArtworks();
+
+  if (currentPageArtworks.length === 0 && isSearching) {
+    return (
+      <div className="grid-container">
+        {/* Header */}
+        <div className="grid-header">
+          <h1>🎨 Base Art Club</h1>
+          <div className="page-indicator">
+            {allArtworks.length} artworks
+          </div>
+        </div>
+
+        {/* Search Section */}
+        <div className="search-section">
+          <div className="search-container">
+            <input
+              type="text"
+              placeholder="Search by artist name..."
+              value={searchTerm}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="search-input"
+            />
+            {searchTerm && (
+              <button onClick={clearSearch} className="clear-search-btn">
+                ×
+              </button>
+            )}
+          </div>
+          {availableArtists.length > 0 && (
+            <button 
+              onClick={() => setShowArtistList(!showArtistList)}
+              className="view-artists-btn"
+            >
+              {showArtistList ? 'Hide' : 'View'} Artists ({availableArtists.length})
+            </button>
+          )}
+          {showArtistList && (
+            <div className="artist-list">
+              {availableArtists.map(artist => (
+                <button
+                  key={artist}
+                  onClick={() => selectArtist(artist)}
+                  className="artist-tag"
+                >
+                  {artist}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="loading-center">
+          <h3>No artworks found</h3>
+          <p style={{ margin: '16px 0', textAlign: 'center', color: '#64748b' }}>
+            No artworks found for artist "{searchTerm}"
+          </p>
+          <button 
+            onClick={clearSearch}
+            className="refresh-btn"
+          >
+            Clear Search
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (currentPageArtworks.length === 0) {
     return (
@@ -253,8 +375,48 @@ export default function Home() {
       <div className="grid-header">
         <h1>🎨 Base Art Club</h1>
         <div className="page-indicator">
-          Page {currentPage + 1} • {artworks.length} artworks
+          Page {currentPage + 1} • {filteredArtworks.length} artworks
+          {isSearching && ` • Searching: "${searchTerm}"`}
         </div>
+      </div>
+
+      {/* Search Section */}
+      <div className="search-section">
+        <div className="search-container">
+          <input
+            type="text"
+            placeholder="Search by artist name..."
+            value={searchTerm}
+            onChange={(e) => handleSearch(e.target.value)}
+            className="search-input"
+          />
+          {searchTerm && (
+            <button onClick={clearSearch} className="clear-search-btn">
+              ×
+            </button>
+          )}
+        </div>
+        {availableArtists.length > 0 && (
+          <button 
+            onClick={() => setShowArtistList(!showArtistList)}
+            className="view-artists-btn"
+          >
+            {showArtistList ? 'Hide' : 'View'} Artists ({availableArtists.length})
+          </button>
+        )}
+        {showArtistList && (
+          <div className="artist-list">
+            {availableArtists.map(artist => (
+              <button
+                key={artist}
+                onClick={() => selectArtist(artist)}
+                className="artist-tag"
+              >
+                {artist}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Grid of artworks */}
@@ -287,7 +449,7 @@ export default function Home() {
                   {artwork.price.value} {artwork.price.currency}
                 </div>
               </div>
-              <div className="artwork-info">
+              <div className="artwork-text-below">
                 <div className="artwork-name">{artwork.name || `Token #${artwork.tokenId}`}</div>
                 <div className="artwork-artist">by {artwork.artist || 'Unknown'}</div>
               </div>
@@ -310,7 +472,7 @@ export default function Home() {
           onClick={handleNextPage}
           className="nav-btn next-btn"
         >
-          {hasNextPage() ? 'Pass →' : 'Load More →'}
+          {hasNextPage() ? 'Pass →' : (isSearching ? 'No More' : 'Load More →')}
         </button>
       </div>
 
