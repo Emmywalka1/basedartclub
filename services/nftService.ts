@@ -2,7 +2,30 @@
 import axios from 'axios';
 
 const ALCHEMY_API_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY!;
-const ALCHEMY_BASE_URL = `https://base-mainnet.g.alchemy.com/nft/v3/${ALCHEMY_API_KEY}`;
+const ALCHEMY_BASE_URL = `https://base-mainnet.g.alchemy.com/nft/v3/${ALCHEMY_API_KEY  // Get all unique artists from loaded NFTs
+  static getUniqueArtists(nfts: NFTAsset[]): string[] {
+    const artists = new Set<string>();
+    nfts.forEach(nft => {
+      if (nft.artist && nft.artist !== 'Unknown Artist') {
+        artists.add(nft.artist);
+      }
+    });
+    return Array.from(artists).sort();
+  }
+  
+  // Filter NFTs by artist name
+  static filterByArtist(nfts: NFTAsset[], searchTerm: string): NFTAsset[] {
+    if (!searchTerm || searchTerm.trim() === '') {
+      return nfts;
+    }
+    
+    const search = searchTerm.toLowerCase().trim();
+    return nfts.filter(nft => {
+      const artist = (nft.artist || '').toLowerCase();
+      return artist.includes(search);
+    });
+  }
+}`;
 
 // OpenSea API for real marketplace data
 const OPENSEA_API_KEY = process.env.OPENSEA_API_KEY;
