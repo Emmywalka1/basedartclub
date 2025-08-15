@@ -1,4 +1,4 @@
-// services/nftService.ts - Enhanced with Moralis Integration
+// services/nftService.ts - Enhanced with Moralis Integration and Wallet Support
 import axios from 'axios';
 
 const ALCHEMY_API_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY!;
@@ -59,10 +59,17 @@ export class NFTService {
   static async fetchCuratedNFTs(limit: number = 20, additionalContracts: string[] = []): Promise<NFTAsset[]> {
     console.log('⚡ Loading artworks (prioritizing real marketplace prices)...');
     
-    // Combine base contracts with user-provided contracts
+    // Combine base contracts with user-added contracts
     const allContracts = [...BASE_ART_CONTRACTS, ...additionalContracts];
     
-    const cacheKey = `curated-nfts-${limit}-${additionalContracts.join('_')}`;
+    // Remove duplicates
+    const uniqueContracts = Array.from(new Set(allContracts.map(c => c.toLowerCase()))).map(c => c);
+    
+    if (additionalContracts.length > 0) {
+      console.log(`Including ${additionalContracts.length} user-added contracts`);
+    }
+    
+    const cacheKey = `curated-nfts-${limit}-${uniqueContracts.join('-')}`;
     const cached = NFT_CACHE.get(cacheKey);
     
     // Return cached data if fresh
@@ -72,9 +79,9 @@ export class NFTService {
     }
     
     try {
-      // Parallel API calls for speed
-      const promises = allContracts.map(contract => 
-        this.fetchContractForSaleNFTs(contract, Math.ceil(limit / allContracts.length))
+      // Parallel API calls for all contracts
+      const promises = uniqueContracts.map(contract => 
+        this.fetchContractForSaleNFTs(contract, Math.ceil(limit / uniqueContracts.length))
       );
       
       const results = await Promise.allSettled(promises);
@@ -84,12 +91,14 @@ export class NFTService {
       results.forEach((result, index) => {
         if (result.status === 'fulfilled') {
           allArtworks.push(...result.value);
-          // Count how many have real marketplace prices vs estimated
           const realPrices = result.value.filter(nft => 
             nft.metadata?.hasRealPrice === true
           ).length;
           realListings += realPrices;
-          console.log(`✅ Contract ${index + 1}: ${result.value.length} artworks (${realPrices} with real prices)`);
+          
+          const contractAddress = uniqueContracts[index];
+          const isUserContract = additionalContracts.some(c => c.toLowerCase() === contractAddress);
+          console.log(`✅ ${isUserContract ? '[USER]' : '[BASE]'} Contract ${index + 1}: ${result.value.length} artworks (${realPrices} with real prices)`);
         } else {
           console.error(`❌ Contract ${index + 1} failed:`, result.reason);
         }
@@ -115,13 +124,66 @@ export class NFTService {
       });
       
       console.log(`⚡ SUCCESS: ${finalArt.length} artworks loaded (${realListings} with real marketplace prices)`);
-      if (additionalContracts.length > 0) {
-        console.log(`📝 Including ${additionalContracts.length} user-added contracts`);
-      }
       return finalArt;
       
     } catch (error) {
       console.error('❌ Error fetching artworks:', error);
+      return [];
+    }
+  }
+
+  // Fetch NFTs owned by a wallet address
+  static async fetchWalletNFTs(walletAddress: string, limit: number = 20): Promise<NFTAsset[]> {
+    try {
+      console.log(`🔍 Fetching NFTs owned by wallet: ${walletAddress}`);
+      
+      const response = await axios.get(
+        `${ALCHEMY_BASE_URL}/getNFTsForOwner`,
+        {
+          params: {
+            owner: walletAddress,
+            withMetadata: true,
+            pageSize: limit,
+            orderBy: 'transferTime',
+          },
+          timeout: 10000,
+        }
+      );
+      
+      if (!response.data?.ownedNfts?.length) {
+        console.log(`No NFTs found for wallet ${walletAddress}`);
+        return [];
+      }
+      
+      console.log(`Found ${response.data.ownedNfts.length} NFTs in wallet`);
+      
+      // Process the NFTs
+      const processedNFTs: NFTAsset[] = [];
+      
+      for (const nft of response.data.ownedNfts) {
+        // Check if it's for sale
+        const saleStatus = await this.checkIfForSale(nft, nft.contract.address);
+        
+        let price: { value: string; currency: string };
+        let isRealPrice = false;
+        
+        if (saleStatus.isForSale && saleStatus.price) {
+          price = saleStatus.price;
+          isRealPrice = true;
+        } else {
+          // Generate estimated price for display
+          price = this.generateRealisticPrice(nft.contract.address, nft.tokenId);
+          isRealPrice = false;
+        }
+        
+        const formatted = this.formatForSaleNFT(nft, nft.contract.address, price, isRealPrice);
+        processedNFTs.push(formatted);
+      }
+      
+      return processedNFTs;
+      
+    } catch (error) {
+      console.error(`Error fetching wallet NFTs:`, error);
       return [];
     }
   }
@@ -865,46 +927,6 @@ export class NFTService {
       seen.add(key);
       return true;
     });
-  }
-  
-  // Fetch NFTs owned by a specific wallet
-  static async fetchWalletNFTs(walletAddress: string, limit: number = 20): Promise<NFTAsset[]> {
-    try {
-      console.log(`📱 Fetching NFTs from wallet ${walletAddress}...`);
-      
-      const response = await axios.get(
-        `${ALCHEMY_BASE_URL}/getNFTsForOwner`,
-        {
-          params: {
-            owner: walletAddress,
-            withMetadata: true,
-            pageSize: limit,
-          },
-          timeout: 10000,
-        }
-      );
-      
-      if (!response.data?.ownedNfts?.length) {
-        console.log('❌ No NFTs found in wallet');
-        return [];
-      }
-      
-      const nfts: NFTAsset[] = [];
-      
-      for (const nft of response.data.ownedNfts) {
-        // Check if it's on Base network (you might need to filter by contract address)
-        const price = this.generateRealisticPrice(nft.contract.address, nft.tokenId);
-        const formatted = this.formatForSaleNFT(nft, nft.contract.address, price, false);
-        nfts.push(formatted);
-      }
-      
-      console.log(`✅ Found ${nfts.length} NFTs in wallet`);
-      return nfts;
-      
-    } catch (error) {
-      console.error('Error fetching wallet NFTs:', error);
-      return [];
-    }
   }
   
   // Get all unique artists from loaded NFTs
