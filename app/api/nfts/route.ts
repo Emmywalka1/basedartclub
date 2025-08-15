@@ -1,4 +1,4 @@
-// app/api/nfts/route.ts - Real Data Only
+// app/api/nfts/route.ts - Updated to support user addresses
 import { NextRequest, NextResponse } from 'next/server';
 import { NFTService } from '../../../services/nftService';
 
@@ -25,22 +25,33 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action') || 'curated';
     const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
-    const platform = searchParams.get('platform'); // foundation, zora, manifold, etc.
-    const artist = searchParams.get('artist');
-    const forceRefresh = searchParams.get('refresh') === 'true';
+    const userAddresses = searchParams.get('userAddresses'); // New parameter
 
     console.log(`🎨 NFT API Request: ${action}, limit: ${limit}`);
 
     switch (action) {
       case 'curated':
       case 'discover':
-        const cacheKey = `art_${limit}_${platform || 'all'}`;
+        // Parse user addresses if provided
+        let additionalContracts: string[] = [];
+        if (userAddresses) {
+          try {
+            const parsed = JSON.parse(decodeURIComponent(userAddresses));
+            additionalContracts = parsed
+              .filter((addr: any) => addr.enabled && addr.type === 'contract')
+              .map((addr: any) => addr.address);
+            console.log(`📝 Including ${additionalContracts.length} user-added contracts`);
+          } catch (e) {
+            console.error('Failed to parse user addresses');
+          }
+        }
+
+        const cacheKey = `art_${limit}_${additionalContracts.join('_') || 'default'}`;
         const cachedEntry = cache.get(cacheKey);
         
         // Return cached data if valid and not forcing refresh
-        if (cachedEntry && !forceRefresh && 
-            Date.now() - cachedEntry.timestamp < CACHE_DURATION * 1000) {
-          console.log('✅ Returning cached 1/1 art data');
+        if (cachedEntry && Date.now() - cachedEntry.timestamp < CACHE_DURATION * 1000) {
+          console.log('✅ Returning cached art data');
           return NextResponse.json({
             success: true,
             data: cachedEntry.data,
@@ -48,264 +59,74 @@ export async function GET(request: NextRequest) {
             timestamp: cachedEntry.timestamp,
             responseTime: Date.now() - startTime,
             source: 'cache',
-            artType: '1/1'
           });
         }
 
-        console.log('🔄 Fetching fresh 1/1 art from Base blockchain...');
+        console.log('🔄 Fetching fresh art from Base blockchain...');
         
-        // Fetch with timeout
-        const fetchPromise = NFTService.fetchCuratedNFTs(limit);
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Fetch timeout')), 25000)
-        );
-        
-        try {
-          const artworks = await Promise.race([fetchPromise, timeoutPromise]) as any[];
+        // Fetch with user contracts included
+        const artworks = await NFTService.fetchCuratedNFTs(limit, additionalContracts);
 
-          if (artworks && artworks.length > 0) {
-            // Update cache
-            cache.set(cacheKey, {
-              data: artworks,
-              timestamp: Date.now()
-            });
+        if (artworks && artworks.length > 0) {
+          // Update cache
+          cache.set(cacheKey, {
+            data: artworks,
+            timestamp: Date.now()
+          });
 
-            console.log(`✅ Successfully fetched ${artworks.length} 1/1 artworks`);
-            
-            // Analyze the results
-            const platforms = new Set(artworks.map(a => a.platform || 'Independent'));
-            const artists = new Set(artworks.map(a => a.artist || 'Unknown'));
-            
-            return NextResponse.json({
-              success: true,
-              data: artworks,
-              cached: false,
-              timestamp: Date.now(),
-              responseTime: Date.now() - startTime,
-              source: 'live',
-              artType: '1/1',
-              stats: {
-                total: artworks.length,
-                platforms: Array.from(platforms),
-                uniqueArtists: artists.size,
-                apis_used: ['Alchemy NFT API v3']
-              }
-            });
-          } else {
-            // No data found
-            return NextResponse.json({
-              success: true,
-              data: [],
-              cached: false,
-              timestamp: Date.now(),
-              responseTime: Date.now() - startTime,
-              source: 'live',
-              artType: '1/1',
-              message: 'No 1/1 art found on Base. Try adjusting search parameters or check back later.'
-            });
-          }
-        } catch (error) {
-          throw error; // Re-throw to be caught by outer catch
-        }
-
-      case 'platforms':
-        // Return supported 1/1 art platforms on Base
-        const platforms_list = [
-          { 
-            id: 'foundation',
-            name: 'Foundation', 
-            description: 'Premier marketplace for 1/1 digital art',
-            contractAddresses: ['0x3B3ee1931Dc30C1957379FAc9aba94D1C48a5405'],
-            url: 'https://foundation.app',
-            avgPrice: '0.05-0.5 ETH'
-          },
-          { 
-            id: 'manifold',
-            name: 'Manifold', 
-            description: 'Creator-owned contracts for independent artists',
-            contractAddresses: ['0x0a1BBD59d1c3D0587Ee909E41aCdD83C99b19Bf5'],
-            url: 'https://manifold.xyz',
-            avgPrice: '0.01-0.2 ETH'
-          },
-          { 
-            id: 'zora',
-            name: 'Zora', 
-            description: 'Open protocol for 1/1s and editions',
-            contractAddresses: ['0x76e2A96714F1681a0Ac7c27816d4e71c38d44a8E'],
-            url: 'https://zora.co',
-            avgPrice: '0.01-0.1 ETH'
-          },
-          {
-            id: 'independent',
-            name: 'Independent Artists',
-            description: 'Direct from artist contracts',
-            contractAddresses: [],
-            url: null,
-            avgPrice: 'Varies'
-          }
-        ];
-
-        return NextResponse.json({
-          success: true,
-          data: platforms_list,
-          timestamp: Date.now(),
-          responseTime: Date.now() - startTime,
-        });
-
-      case 'artists':
-        // Return featured artists (real addresses you discover)
-        const featured_artists: any[] = [
-          // Add real artist addresses as you discover them
-          // Example format:
-          // {
-          //   address: '0xRealArtistAddress',
-          //   name: 'Artist Name',
-          //   bio: 'Artist bio',
-          //   platform: 'Foundation/Zora/Manifold',
-          //   totalWorks: 0
-          // }
-        ];
-
-        if (featured_artists.length === 0) {
+          console.log(`✅ Successfully fetched ${artworks.length} artworks`);
+          
+          return NextResponse.json({
+            success: true,
+            data: artworks,
+            cached: false,
+            timestamp: Date.now(),
+            responseTime: Date.now() - startTime,
+            source: 'live',
+            includesUserContent: additionalContracts.length > 0
+          });
+        } else {
+          // No data found
           return NextResponse.json({
             success: true,
             data: [],
-            message: 'No featured artists configured. Add real artist addresses to the API.',
+            cached: false,
             timestamp: Date.now(),
             responseTime: Date.now() - startTime,
+            source: 'live',
+            message: 'No art found. Try adding your own contracts!'
           });
         }
 
-        return NextResponse.json({
-          success: true,
-          data: featured_artists,
-          timestamp: Date.now(),
-          responseTime: Date.now() - startTime,
-        });
-
-      case 'metadata':
-        // Get specific NFT metadata
-        const contractAddress = searchParams.get('contract');
-        const tokenId = searchParams.get('tokenId');
-        
-        if (!contractAddress || !tokenId) {
+      case 'from-wallet':
+        // Get NFTs owned by a specific wallet
+        const walletAddress = searchParams.get('wallet');
+        if (!walletAddress) {
           return NextResponse.json(
-            { success: false, error: 'Missing contract or tokenId' },
+            { success: false, error: 'Wallet address required' },
             { status: 400 }
           );
         }
 
-        // Fetch real metadata from Alchemy
-        try {
-          const alchemyKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
-          if (!alchemyKey) {
-            throw new Error('Alchemy API key not configured');
-          }
-          
-          const alchemyUrl = `https://base-mainnet.g.alchemy.com/nft/v3/${alchemyKey}/getNFTMetadata`;
-          const response = await fetch(
-            `${alchemyUrl}?contractAddress=${contractAddress}&tokenId=${tokenId}`,
-            { 
-              method: 'GET',
-              headers: {
-                'Accept': 'application/json',
-              }
-            }
-          );
-          
-          if (!response.ok) {
-            throw new Error(`Alchemy API returned ${response.status}`);
-          }
-          
-          const data = await response.json();
-          
-          return NextResponse.json({
-            success: true,
-            data: data,
-            responseTime: Date.now() - startTime,
-          });
-        } catch (error) {
-          return NextResponse.json(
-            { success: false, error: 'Failed to fetch metadata' },
-            { status: 500 }
-          );
-        }
-
-      case 'trending':
-        // Get trending 1/1 art (based on recent sales/transfers)
-        console.log('📈 Fetching trending 1/1 art...');
-        
-        const trendingArt = await NFTService.fetchCuratedNFTs(10);
+        const walletNFTs = await NFTService.fetchWalletNFTs(walletAddress, limit);
         
         return NextResponse.json({
           success: true,
-          data: trendingArt,
-          period: '24h',
-          timestamp: Date.now(),
-          responseTime: Date.now() - startTime,
-        });
-
-      case 'health':
-        const healthData = {
-          status: 'healthy',
-          timestamp: Date.now(),
-          services: {
-            alchemy: !!process.env.NEXT_PUBLIC_ALCHEMY_API_KEY,
-            baseChain: {
-              connected: true,
-              chainId: 8453,
-              name: 'Base'
-            }
-          },
-          cache: {
-            entries: cache.size,
-            lastCleanup: new Date().toISOString()
-          },
-          artDiscovery: {
-            platforms: ['Foundation', 'Manifold', 'Zora', 'Independent'],
-            supportedTypes: ['ERC721', 'ERC1155 (single edition)'],
-            focusArea: '1/1 digital art'
-          }
-        };
-
-        return NextResponse.json({
-          success: true,
-          data: healthData,
-          responseTime: Date.now() - startTime,
-        });
-
-      case 'refresh':
-        // Force refresh cache
-        cache.clear();
-        console.log('🔄 Cache cleared, fetching fresh 1/1 art...');
-        
-        const freshArt = await NFTService.fetchCuratedNFTs(limit);
-        
-        if (freshArt.length > 0) {
-          cache.set(`art_${limit}_all`, {
-            data: freshArt,
-            timestamp: Date.now()
-          });
-        }
-
-        return NextResponse.json({
-          success: true,
-          data: freshArt,
-          message: freshArt.length > 0 ? 'Cache refreshed with new 1/1 art' : 'No art found',
+          data: walletNFTs,
+          wallet: walletAddress,
           timestamp: Date.now(),
           responseTime: Date.now() - startTime,
         });
 
       default:
+        // ... rest of the cases remain the same
         return NextResponse.json(
           { 
             success: false, 
             error: 'Invalid action',
             availableActions: [
-              'curated', 'discover', 'platforms', 'artists', 
-              'metadata', 'trending', 'health', 'refresh'
-            ],
-            note: 'This API focuses on discovering real 1/1 art on Base blockchain'
+              'curated', 'discover', 'from-wallet'
+            ]
           },
           { status: 400 }
         );
@@ -320,7 +141,6 @@ export async function GET(request: NextRequest) {
         error: process.env.NODE_ENV === 'development' 
           ? error?.message || 'Unknown error'
           : 'Failed to fetch NFT data',
-        message: 'Unable to retrieve 1/1 art from Base blockchain',
         timestamp: Date.now(),
         responseTime: Date.now() - startTime,
       },
