@@ -1,9 +1,9 @@
-// app/page.tsx - COMPLETE FILE WITH GRID, POPUP, AND SEARCH
-// This has ALL features: Grid Layout + Popup + Search
+// app/page.tsx - COMPLETE FILE WITH GRID, POPUP, SEARCH, AND ADD ADDRESS
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
 import { sdk } from '@farcaster/frame-sdk';
+import AddAddressSection, { UserAddress } from '../components/AddAddressSection';
 
 // Types
 interface NFTAsset {
@@ -44,30 +44,33 @@ export default function Home() {
   const [selectedArtwork, setSelectedArtwork] = useState<NFTAsset | null>(null);
   const [imageCache, setImageCache] = useState<Set<string>>(new Set());
   
-  // NEW: Search-related states
+  // Search-related states
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [filteredArtworks, setFilteredArtworks] = useState<NFTAsset[]>([]);
   const [availableArtists, setAvailableArtists] = useState<string[]>([]);
   const [showArtistList, setShowArtistList] = useState(false);
   
+  // NEW: State for showing/hiding add address section
+  const [showAddSection, setShowAddSection] = useState(false);
+  
   const ITEMS_PER_PAGE = 4;
   
-  // Get current page artworks - NOW USES filteredArtworks
+  // Get current page artworks
   const getCurrentPageArtworks = () => {
     const startIndex = currentPage * ITEMS_PER_PAGE;
     return filteredArtworks.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   };
 
-  // Check if there's a next page - NOW USES filteredArtworks
+  // Check if there's a next page
   const hasNextPage = () => {
     return (currentPage + 1) * ITEMS_PER_PAGE < filteredArtworks.length;
   };
 
-  // NEW: Filter artworks by search term
+  // Filter artworks by search term
   const handleSearch = useCallback((term: string) => {
     setSearchTerm(term);
-    setCurrentPage(0); // Reset to first page when searching
+    setCurrentPage(0);
     
     if (!term.trim()) {
       setFilteredArtworks(artworks);
@@ -83,7 +86,7 @@ export default function Home() {
     }
   }, [artworks]);
 
-  // NEW: Clear search
+  // Clear search
   const clearSearch = () => {
     setSearchTerm('');
     setFilteredArtworks(artworks);
@@ -92,7 +95,7 @@ export default function Home() {
     setShowArtistList(false);
   };
 
-  // NEW: Handle artist selection from list
+  // Handle artist selection from list
   const selectArtist = (artist: string) => {
     handleSearch(artist);
     setShowArtistList(false);
@@ -138,7 +141,7 @@ export default function Home() {
     initializeApp();
   }, []);
 
-  // NEW: Update filtered artworks when all artworks change
+  // Update filtered artworks when all artworks change
   useEffect(() => {
     if (!isSearching) {
       setFilteredArtworks(artworks);
@@ -165,20 +168,33 @@ export default function Home() {
     }
   }, [filteredArtworks, currentPage, preloadImages]);
 
-  const loadArtworks = async () => {
+  const loadArtworks = async (includeUserAddresses: boolean = true) => {
     try {
       setIsLoading(true);
       setError(null);
       
-      console.log('⚡ Loading for-sale artworks...');
-      const response = await fetch('/api/nfts?action=curated&limit=40');
+      console.log('⚡ Loading artworks...');
+      
+      // Get user addresses from localStorage if we should include them
+      let userAddressesParam = '';
+      if (includeUserAddresses) {
+        const savedAddresses = localStorage.getItem('userAddresses');
+        if (savedAddresses) {
+          userAddressesParam = `&userAddresses=${encodeURIComponent(savedAddresses)}`;
+        }
+      }
+      
+      const response = await fetch(`/api/nfts?action=curated&limit=40${userAddressesParam}`);
       const data = await response.json();
       
       if (data.success && data.data && data.data.length > 0) {
-        console.log(`✅ Loaded ${data.data.length} for-sale artworks`);
+        console.log(`✅ Loaded ${data.data.length} artworks`);
+        if (data.includesUserContent) {
+          console.log('✅ Including user-added collections');
+        }
         setArtworks(data.data);
       } else {
-        setError('No for-sale artworks found.');
+        setError('No artworks found.');
         setArtworks([]);
       }
       
@@ -189,6 +205,12 @@ export default function Home() {
       setArtworks([]);
       setIsLoading(false);
     }
+  };
+
+  // NEW: Handler for when user adds a new address
+  const handleAddressAdded = () => {
+    console.log('New address added, reloading artworks...');
+    loadArtworks(true); // Reload with user addresses
   };
 
   const handleArtworkClick = (artwork: NFTAsset) => {
@@ -258,7 +280,7 @@ export default function Home() {
       <div className="grid-container">
         <div className="loading-center">
           <div className="loading-spinner"></div>
-          <div style={{ marginTop: '16px', color: '#64748b' }}>Loading for-sale artworks...</div>
+          <div style={{ marginTop: '16px', color: '#64748b' }}>Loading artworks...</div>
         </div>
       </div>
     );
@@ -268,16 +290,22 @@ export default function Home() {
     return (
       <div className="grid-container">
         <div className="loading-center">
-          <h3>No for-sale artworks available</h3>
+          <h3>No artworks available</h3>
           <p style={{ margin: '16px 0', textAlign: 'center', color: '#64748b' }}>
-            {error || 'No artworks are currently listed for sale'}
+            {error || 'No artworks are currently available'}
           </p>
           <button 
-            onClick={loadArtworks}
+            onClick={() => loadArtworks()}
             className="refresh-btn"
           >
             Refresh
           </button>
+          <p style={{ marginTop: '20px', fontSize: '14px', color: '#94a3b8' }}>
+            Or add your own art collection below:
+          </p>
+          <div style={{ marginTop: '20px', width: '100%', maxWidth: '400px' }}>
+            <AddAddressSection onAddressAdded={handleAddressAdded} />
+          </div>
         </div>
       </div>
     );
@@ -366,19 +394,45 @@ export default function Home() {
     );
   }
 
-  // MAIN RETURN WITH ALL FEATURES: HEADER + SEARCH + GRID + POPUP
+  // MAIN RETURN WITH ALL FEATURES
   return (
     <div className="grid-container">
-      {/* HEADER - ORIGINAL */}
+      {/* HEADER */}
       <div className="grid-header">
         <h1>🎨 Base Art Club</h1>
         <div className="page-indicator">
           Page {currentPage + 1} • {filteredArtworks.length} artworks
           {isSearching && ` • Searching: "${searchTerm}"`}
         </div>
+        {/* NEW: Toggle button for Add Address Section */}
+        <button 
+          onClick={() => setShowAddSection(!showAddSection)}
+          className="add-toggle-main"
+          style={{
+            marginTop: '10px',
+            padding: '8px 16px',
+            background: showAddSection ? 'rgba(239, 68, 68, 0.2)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '20px',
+            fontSize: '13px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            transition: 'all 0.3s ease',
+          }}
+        >
+          {showAddSection ? '✕ Close' : '+ Add Your Art'}
+        </button>
       </div>
 
-      {/* SEARCH SECTION - NEW ADDITION */}
+      {/* NEW: ADD ADDRESS SECTION - Now properly integrated */}
+      {showAddSection && (
+        <div style={{ marginBottom: '20px' }}>
+          <AddAddressSection onAddressAdded={handleAddressAdded} />
+        </div>
+      )}
+
+      {/* SEARCH SECTION */}
       <div className="search-section">
         <div className="search-container">
           <input
@@ -417,7 +471,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* GRID OF ARTWORKS - ORIGINAL, STILL HERE! */}
+      {/* GRID OF ARTWORKS */}
       <div className="artworks-grid">
         {currentPageArtworks.map((artwork, index) => {
           const imageUrl = artwork.image.cachedUrl || artwork.image.originalUrl || artwork.image.thumbnailUrl;
@@ -456,7 +510,7 @@ export default function Home() {
         })}
       </div>
 
-      {/* NAVIGATION - ORIGINAL */}
+      {/* NAVIGATION */}
       <div className="grid-navigation">
         <button 
           onClick={handlePreviousPage}
@@ -474,7 +528,7 @@ export default function Home() {
         </button>
       </div>
 
-      {/* POPUP MODAL - ORIGINAL, STILL HERE! */}
+      {/* POPUP MODAL */}
       {selectedArtwork && (
         <div className="popup-overlay" onClick={handleClosePopup}>
           <div className="popup-content" onClick={(e) => e.stopPropagation()}>
