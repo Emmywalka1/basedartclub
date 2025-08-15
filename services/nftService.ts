@@ -56,10 +56,13 @@ interface NFTAsset {
 export class NFTService {
   
   // Main function - tries REAL marketplace data with fallbacks
-  static async fetchCuratedNFTs(limit: number = 20): Promise<NFTAsset[]> {
+  static async fetchCuratedNFTs(limit: number = 20, additionalContracts: string[] = []): Promise<NFTAsset[]> {
     console.log('⚡ Loading artworks (prioritizing real marketplace prices)...');
     
-    const cacheKey = `curated-nfts-${limit}`;
+    // Combine base contracts with user-provided contracts
+    const allContracts = [...BASE_ART_CONTRACTS, ...additionalContracts];
+    
+    const cacheKey = `curated-nfts-${limit}-${additionalContracts.join('_')}`;
     const cached = NFT_CACHE.get(cacheKey);
     
     // Return cached data if fresh
@@ -70,8 +73,8 @@ export class NFTService {
     
     try {
       // Parallel API calls for speed
-      const promises = BASE_ART_CONTRACTS.map(contract => 
-        this.fetchContractForSaleNFTs(contract, Math.ceil(limit / BASE_ART_CONTRACTS.length))
+      const promises = allContracts.map(contract => 
+        this.fetchContractForSaleNFTs(contract, Math.ceil(limit / allContracts.length))
       );
       
       const results = await Promise.allSettled(promises);
@@ -112,6 +115,9 @@ export class NFTService {
       });
       
       console.log(`⚡ SUCCESS: ${finalArt.length} artworks loaded (${realListings} with real marketplace prices)`);
+      if (additionalContracts.length > 0) {
+        console.log(`📝 Including ${additionalContracts.length} user-added contracts`);
+      }
       return finalArt;
       
     } catch (error) {
@@ -859,6 +865,46 @@ export class NFTService {
       seen.add(key);
       return true;
     });
+  }
+  
+  // Fetch NFTs owned by a specific wallet
+  static async fetchWalletNFTs(walletAddress: string, limit: number = 20): Promise<NFTAsset[]> {
+    try {
+      console.log(`📱 Fetching NFTs from wallet ${walletAddress}...`);
+      
+      const response = await axios.get(
+        `${ALCHEMY_BASE_URL}/getNFTsForOwner`,
+        {
+          params: {
+            owner: walletAddress,
+            withMetadata: true,
+            pageSize: limit,
+          },
+          timeout: 10000,
+        }
+      );
+      
+      if (!response.data?.ownedNfts?.length) {
+        console.log('❌ No NFTs found in wallet');
+        return [];
+      }
+      
+      const nfts: NFTAsset[] = [];
+      
+      for (const nft of response.data.ownedNfts) {
+        // Check if it's on Base network (you might need to filter by contract address)
+        const price = this.generateRealisticPrice(nft.contract.address, nft.tokenId);
+        const formatted = this.formatForSaleNFT(nft, nft.contract.address, price, false);
+        nfts.push(formatted);
+      }
+      
+      console.log(`✅ Found ${nfts.length} NFTs in wallet`);
+      return nfts;
+      
+    } catch (error) {
+      console.error('Error fetching wallet NFTs:', error);
+      return [];
+    }
   }
   
   // Get all unique artists from loaded NFTs
