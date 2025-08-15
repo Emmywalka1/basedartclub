@@ -1,5 +1,6 @@
-// services/nftService.ts - Enhanced with Moralis Integration and Wallet Support
+// services/nftService.ts - Complete service with REAL marketplace price integration
 import axios from 'axios';
+import { MarketplacePriceService } from './marketplacePriceService';
 
 const ALCHEMY_API_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY!;
 const ALCHEMY_BASE_URL = `https://base-mainnet.g.alchemy.com/nft/v3/${ALCHEMY_API_KEY}`;
@@ -260,95 +261,63 @@ export class NFTService {
     }
   }
   
-  // Fast for-sale check with REAL price fetching
-  private static async checkIfForSale(nft: any, contractAddress: string): Promise<{ isForSale: boolean; price?: { value: string; currency: string } }> {
+  // UPDATED: Enhanced for-sale check with REAL marketplace prices
+  private static async checkIfForSale(nft: any, contractAddress: string): Promise<{ isForSale: boolean; price?: { value: string; currency: string; marketplace?: string } }> {
     try {
-      const lowerAddress = contractAddress.toLowerCase();
+      console.log(`🔍 Checking real price for ${nft.name || nft.tokenId}`);
       
-      // Define known contract addresses
-      const foundationContracts = ['0x972f31d4e140f0d09b154bb395a070ed5ee9fcca'];
-      const juujuumamaContracts = [
-        '0x58fd65a42d33f080543b5f98a1cfa9fbce9fbb4a',
-        '0xd3963e400cf668bfd082ae2cd5e10a399aacd839'
-      ];
-      const zoraContracts: string[] = []; // Add Zora-specific contracts here if known
+      // Use the new marketplace price service to get REAL prices
+      const marketplacePrice = await MarketplacePriceService.getBestPrice(
+        contractAddress,
+        nft.tokenId
+      );
       
-      // Method 1: Check OpenSea API for real listings
-      // Check OpenSea for all contracts, but especially juujuumama
-      if (OPENSEA_API_KEY && (juujuumamaContracts.includes(lowerAddress) || !foundationContracts.includes(lowerAddress))) {
-        const openSeaListing = await this.checkOpenSeaListing(contractAddress, nft.tokenId);
-        if (openSeaListing.isListed && openSeaListing.price) {
-          console.log(`💰 OpenSea listing found for ${nft.name || nft.tokenId}`);
-          return {
-            isForSale: true,
-            price: openSeaListing.price
-          };
-        }
+      if (marketplacePrice && marketplacePrice.isRealPrice) {
+        console.log(`✅ REAL PRICE FOUND: ${marketplacePrice.value} ${marketplacePrice.currency} on ${marketplacePrice.marketplace}`);
+        return {
+          isForSale: true,
+          price: {
+            value: marketplacePrice.value,
+            currency: marketplacePrice.currency,
+            marketplace: marketplacePrice.marketplace
+          }
+        };
       }
       
-      // Method 2: Check Foundation API for Foundation contracts
-      if (foundationContracts.includes(lowerAddress)) {
-        const foundationListing = await this.checkFoundationListing(contractAddress, nft.tokenId);
-        if (foundationListing.isListed && foundationListing.price) {
-          console.log(`💰 Foundation listing found for ${nft.name || nft.tokenId}`);
-          return {
-            isForSale: true,
-            price: foundationListing.price
-          };
-        }
-      }
-      
-      // Method 3: Check Zora API for all contracts (Zora is open to all)
-      // Prioritize for juujuumama contracts as they might list there
-      if (juujuumamaContracts.includes(lowerAddress) || zoraContracts.includes(lowerAddress)) {
-        const zoraListing = await this.checkZoraListing(contractAddress, nft.tokenId);
-        if (zoraListing.isListed && zoraListing.price) {
-          console.log(`💰 Zora listing found for ${nft.name || nft.tokenId}`);
-          return {
-            isForSale: true,
-            price: zoraListing.price
-          };
-        }
-      }
-      
-      // Method 4: Check metadata for sale indicators with price
-      // Especially important for juujuumama contracts which might have custom metadata
+      // Fallback: Check metadata for price indicators
       const metadata = nft.metadata || nft.rawMetadata || {};
       
-      // For juujuumama contracts, also check additional price fields
-      if (juujuumamaContracts.includes(lowerAddress)) {
-        const priceValue = metadata.listing_price || 
-                          metadata.sale_price || 
-                          metadata.price ||
-                          metadata.currentPrice ||
-                          metadata.buyNowPrice ||
-                          metadata.reservePrice;
-                          
-        if (priceValue) {
-          console.log(`💰 Metadata price found for juujuumama NFT: ${priceValue}`);
-          return {
-            isForSale: true,
-            price: {
-              value: priceValue.toString(),
-              currency: 'ETH'
-            }
-          };
+      // Check various metadata fields for prices
+      const metadataPrice = 
+        metadata.price ||
+        metadata.listing_price ||
+        metadata.sale_price ||
+        metadata.currentPrice ||
+        metadata.buyNowPrice ||
+        metadata.reservePrice;
+      
+      if (metadataPrice) {
+        console.log(`💰 Metadata price found: ${metadataPrice}`);
+        
+        // Convert to ETH if needed
+        let ethValue = metadataPrice;
+        if (typeof metadataPrice === 'number' && metadataPrice > 1000) {
+          // Likely in wei, convert to ETH
+          ethValue = (metadataPrice / 1e18).toFixed(4);
         }
-      } else {
-        // Standard metadata check for other contracts
-        if (metadata.listing_price || metadata.sale_price || metadata.price) {
-          const priceValue = metadata.listing_price || metadata.sale_price || metadata.price;
-          return {
-            isForSale: true,
-            price: {
-              value: priceValue.toString(),
-              currency: 'ETH'
-            }
-          };
-        }
+        
+        return {
+          isForSale: true,
+          price: {
+            value: ethValue.toString(),
+            currency: 'ETH',
+            marketplace: 'Metadata'
+          }
+        };
       }
       
-      // If no real price data found, not for sale
+      // No real price found
+      console.log(`⚠️ No real price found for ${nft.name || nft.tokenId}`);
       return { isForSale: false };
       
     } catch (error) {
@@ -357,158 +326,8 @@ export class NFTService {
     }
   }
   
-  // Check OpenSea for real listings with prices
-  private static async checkOpenSeaListing(contractAddress: string, tokenId: string): Promise<{ isListed: boolean; price?: { value: string; currency: string } }> {
-    if (!OPENSEA_API_KEY) return { isListed: false };
-    
-    try {
-      const response = await axios.get(
-        `${OPENSEA_BASE_URL}/orders/base/seaport/listings`,
-        {
-          params: {
-            asset_contract_address: contractAddress,
-            token_ids: tokenId,
-            order_by: 'created_date',
-            order_direction: 'desc',
-            limit: 1,
-          },
-          headers: {
-            'X-API-KEY': OPENSEA_API_KEY,
-          },
-          timeout: 5000,
-        }
-      );
-      
-      if (response.data?.orders?.length > 0) {
-        const listing = response.data.orders[0];
-        const price = listing.current_price;
-        
-        if (price) {
-          // Convert from wei to ETH
-          const ethPrice = (parseFloat(price) / Math.pow(10, 18)).toFixed(4);
-          return {
-            isListed: true,
-            price: {
-              value: ethPrice,
-              currency: 'ETH'
-            }
-          };
-        }
-      }
-      
-      return { isListed: false };
-    } catch (error) {
-      console.error('OpenSea API error:', error);
-      return { isListed: false };
-    }
-  }
-
-  // Check Foundation for real listings with prices
-  private static async checkFoundationListing(contractAddress: string, tokenId: string): Promise<{ isListed: boolean; price?: { value: string; currency: string } }> {
-    try {
-      // Foundation API endpoint for getting NFT details
-      const response = await axios.get(
-        `https://api.foundation.app/v1/artworks/${contractAddress}/${tokenId}`,
-        {
-          timeout: 5000,
-        }
-      );
-      
-      if (response.data?.marketplace?.reserve_price || response.data?.marketplace?.buy_now_price) {
-        const price = response.data.marketplace.buy_now_price || response.data.marketplace.reserve_price;
-        return {
-          isListed: true,
-          price: {
-            value: (parseFloat(price) / Math.pow(10, 18)).toFixed(4),
-            currency: 'ETH'
-          }
-        };
-      }
-      
-      return { isListed: false };
-    } catch (error) {
-      console.error('Foundation API error:', error);
-      return { isListed: false };
-    }
-  }
-
-  // Check Zora for real listings with prices
-  private static async checkZoraListing(contractAddress: string, tokenId: string): Promise<{ isListed: boolean; price?: { value: string; currency: string } }> {
-    try {
-      // Zora's new API endpoint (no key required)
-      // Using their market API v2 which is more reliable
-      const response = await axios.get(
-        `https://api.zora.co/discover/tokens/base/${contractAddress}/${tokenId}`,
-        {
-          timeout: 5000,
-          headers: {
-            'Accept': 'application/json',
-          }
-        }
-      );
-      
-      // Check if there's an active market/sale
-      if (response.data?.token?.market?.price?.amount) {
-        const price = response.data.token.market.price;
-        const ethPrice = price.amount?.eth || price.amount?.raw;
-        
-        if (ethPrice) {
-          return {
-            isListed: true,
-            price: {
-              value: ethPrice.toString(),
-              currency: price.currency || 'ETH'
-            }
-          };
-        }
-      }
-      
-      // Alternative: Check for ask/listing price
-      if (response.data?.markets?.askPrice) {
-        const askPrice = response.data.markets.askPrice;
-        return {
-          isListed: true,
-          price: {
-            value: (parseFloat(askPrice) / Math.pow(10, 18)).toFixed(4),
-            currency: 'ETH'
-          }
-        };
-      }
-      
-      return { isListed: false };
-    } catch (error) {
-      // Try alternative Zora endpoint as fallback
-      try {
-        const fallbackResponse = await axios.get(
-          `https://api.zora.co/v2/base/tokens/${contractAddress}:${tokenId}`,
-          {
-            timeout: 5000,
-            headers: {
-              'Accept': 'application/json',
-            }
-          }
-        );
-        
-        if (fallbackResponse.data?.sale?.price) {
-          return {
-            isListed: true,
-            price: {
-              value: (parseFloat(fallbackResponse.data.sale.price) / Math.pow(10, 18)).toFixed(4),
-              currency: 'ETH'
-            }
-          };
-        }
-      } catch (fallbackError) {
-        // Silently fail for fallback
-      }
-      
-      console.error('Zora API error:', error);
-      return { isListed: false };
-    }
-  }
-  
   // Format NFT with real or estimated price data
-  private static formatForSaleNFT(nft: any, contractAddress: string, price: { value: string; currency: string }, isRealPrice: boolean = false): NFTAsset {
+  private static formatForSaleNFT(nft: any, contractAddress: string, price: { value: string; currency: string; marketplace?: string }, isRealPrice: boolean = false): NFTAsset {
     const metadata = nft.metadata || nft.rawMetadata || {};
     
     // Determine the content type
@@ -559,6 +378,11 @@ export class NFTService {
     // Get proper artist name
     const artist = this.extractArtistFromContract(contractAddress, metadata);
     
+    // Include marketplace info in the platform field if we have real price
+    const platform = price.marketplace && isRealPrice 
+      ? price.marketplace 
+      : this.getPlatformName(contractAddress);
+    
     return {
       tokenId: nft.tokenId || '0',
       tokenType: nft.tokenType || 'ERC721',
@@ -578,17 +402,18 @@ export class NFTService {
       metadata: {
         ...metadata,
         hasRealPrice: isRealPrice, // Track if this is real marketplace data
+        marketplace: price.marketplace, // Store where the price came from
       },
       marketplace: this.getPlatformName(contractAddress),
       price: price, // Real or estimated price
       artist: artist,
-      platform: this.getPlatformName(contractAddress),
+      platform: platform, // Will show actual marketplace if real price
       isOneOfOne: true,
       isForSale: true,
     };
   }
   
-  // NEW MORALIS METHODS - OPTION 1 IMPLEMENTATION
+  // NEW MORALIS METHODS
   // =============================================
   
   // Fetch NFT data from Moralis API
@@ -640,7 +465,7 @@ export class NFTService {
       // Check if it's actually for sale with real price
       const saleStatus = await this.checkIfForSale(alchemyData || {}, contractAddress);
       
-      let finalPrice: { value: string; currency: string };
+      let finalPrice: { value: string; currency: string; marketplace?: string };
       let isRealPrice = false;
       
       if (saleStatus.isForSale && saleStatus.price) {
@@ -679,7 +504,7 @@ export class NFTService {
   }
 
   // Helper to combine data from both sources with real or estimated prices
-  private static combineNFTData(alchemyData: any, moralisData: any, contractAddress: string, price: { value: string; currency: string }, isRealPrice: boolean = false): NFTAsset {
+  private static combineNFTData(alchemyData: any, moralisData: any, contractAddress: string, price: { value: string; currency: string; marketplace?: string }, isRealPrice: boolean = false): NFTAsset {
     // Determine content type from Alchemy data
     const contentType = alchemyData?.image?.contentType || '';
     const isVideo = contentType.includes('video') || contentType.includes('mp4') || contentType.includes('webm');
@@ -748,7 +573,13 @@ export class NFTService {
       // Moralis normalized metadata is often cleaner
       normalized: moralisData?.normalized_metadata,
       hasRealPrice: isRealPrice,
+      marketplace: price.marketplace,
     };
+
+    // Include marketplace info in the platform field if we have real price
+    const platform = price.marketplace && isRealPrice 
+      ? price.marketplace 
+      : this.getPlatformName(contractAddress);
 
     return {
       tokenId: alchemyData?.tokenId || moralisData?.token_id || '0',
@@ -770,7 +601,7 @@ export class NFTService {
       marketplace: this.getPlatformName(contractAddress),
       price: price, // Real or estimated price
       artist: this.extractArtistFromContract(contractAddress, combinedMetadata),
-      platform: this.getPlatformName(contractAddress),
+      platform: platform, // Will show actual marketplace if real price
       isOneOfOne: true,
       isForSale: true,
     };
@@ -868,7 +699,7 @@ export class NFTService {
     }
   }
   
-  // END NEW MORALIS METHODS
+  // END MORALIS METHODS
   // =======================
   
   // Generate realistic prices (fallback when no real marketplace data)
