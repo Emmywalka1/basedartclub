@@ -1,5 +1,6 @@
 // services/foundationPriceService.ts
 // Service to fetch real Foundation prices using The Graph and IPFS
+// Fixed for ES5/ES2015 compatibility
 
 import axios from 'axios';
 
@@ -132,10 +133,12 @@ export class FoundationPriceService {
       // Check for active auction
       if (data?.nftMarketAuctions?.length > 0) {
         const auction = data.nftMarketAuctions[0];
-        const priceInEth = (BigInt(auction.highestBid || auction.reservePrice) / BigInt(10 ** 18)).toString();
+        // Convert string to number, divide by 10^18, then convert back to string
+        const priceWei = auction.highestBid || auction.reservePrice;
+        const priceNum = parseFloat(priceWei) / Math.pow(10, 18);
         
         return {
-          value: parseFloat(priceInEth).toFixed(4),
+          value: priceNum.toFixed(4),
           currency: 'ETH',
           marketplace: 'Foundation Auction',
           isRealPrice: true,
@@ -147,10 +150,10 @@ export class FoundationPriceService {
       // Check for buy now price
       if (data?.nftMarketBuyPrices?.length > 0) {
         const listing = data.nftMarketBuyPrices[0];
-        const priceInEth = (BigInt(listing.price) / BigInt(10 ** 18)).toString();
+        const priceNum = parseFloat(listing.price) / Math.pow(10, 18);
         
         return {
-          value: parseFloat(priceInEth).toFixed(4),
+          value: priceNum.toFixed(4),
           currency: 'ETH',
           marketplace: 'Foundation Buy Now',
           isRealPrice: true,
@@ -161,10 +164,10 @@ export class FoundationPriceService {
       // Check for offers
       if (data?.nftMarketOffers?.length > 0) {
         const offer = data.nftMarketOffers[0];
-        const priceInEth = (BigInt(offer.amount) / BigInt(10 ** 18)).toString();
+        const priceNum = parseFloat(offer.amount) / Math.pow(10, 18);
         
         return {
-          value: parseFloat(priceInEth).toFixed(4),
+          value: priceNum.toFixed(4),
           currency: 'ETH',
           marketplace: 'Foundation Offer',
           isRealPrice: true,
@@ -200,9 +203,9 @@ export class FoundationPriceService {
 
         const nft = response.data?.data?.nfts?.[0];
         if (nft?.activeMarket?.reservePrice) {
-          const priceInEth = (BigInt(nft.activeMarket.reservePrice) / BigInt(10 ** 18)).toString();
+          const priceNum = parseFloat(nft.activeMarket.reservePrice) / Math.pow(10, 18);
           return {
-            value: parseFloat(priceInEth).toFixed(4),
+            value: priceNum.toFixed(4),
             currency: 'ETH',
             marketplace: 'Foundation Base',
             isRealPrice: true,
@@ -425,11 +428,23 @@ export class FoundationPriceService {
         
         // Extract price from the hex result (simplified)
         const priceHex = result.slice(0, 66); // First 32 bytes
-        const price = BigInt(priceHex);
         
-        if (price > 0n) {
+        // Convert hex string to number
+        // Remove '0x' prefix if present
+        const cleanHex = priceHex.startsWith('0x') ? priceHex.slice(2) : priceHex;
+        
+        // Parse as decimal number
+        let price = 0;
+        try {
+          price = parseInt(cleanHex, 16);
+        } catch (e) {
+          console.error('Failed to parse hex price:', e);
+          return null;
+        }
+        
+        if (price > 0) {
           return {
-            value: (Number(price) / 1e18).toFixed(4),
+            value: (price / 1e18).toFixed(4),
             currency: 'ETH',
             marketplace: 'Foundation Contract',
             isRealPrice: true,
@@ -448,9 +463,18 @@ export class FoundationPriceService {
     // Function signature for getReserveAuction(address,uint256)
     const functionSig = 'ee1fe091'; // First 4 bytes of keccak256
     const paddedAddress = contractAddress.toLowerCase().replace('0x', '').padStart(64, '0');
-    const paddedTokenId = BigInt(tokenId).toString(16).padStart(64, '0');
     
-    return functionSig + paddedAddress + paddedTokenId;
+    // Convert tokenId to hex and pad
+    let tokenIdHex;
+    try {
+      const tokenIdNum = parseInt(tokenId);
+      tokenIdHex = tokenIdNum.toString(16).padStart(64, '0');
+    } catch (e) {
+      console.error('Failed to convert tokenId to hex:', e);
+      tokenIdHex = '0'.padStart(64, '0');
+    }
+    
+    return functionSig + paddedAddress + tokenIdHex;
   }
 
   // Get all Foundation listings for a contract
@@ -505,9 +529,12 @@ export class FoundationPriceService {
       // Process auctions
       if (data?.nftMarketAuctions) {
         data.nftMarketAuctions.forEach((auction: any) => {
+          const priceWei = auction.highestBid || auction.reservePrice;
+          const priceNum = parseFloat(priceWei) / Math.pow(10, 18);
+          
           listings.push({
             tokenId: auction.tokenId,
-            price: (BigInt(auction.highestBid || auction.reservePrice) / BigInt(10 ** 18)).toString(),
+            price: priceNum.toFixed(4),
             type: 'auction',
             seller: auction.seller,
           });
@@ -517,9 +544,11 @@ export class FoundationPriceService {
       // Process buy now listings
       if (data?.nftMarketBuyPrices) {
         data.nftMarketBuyPrices.forEach((listing: any) => {
+          const priceNum = parseFloat(listing.price) / Math.pow(10, 18);
+          
           listings.push({
             tokenId: listing.tokenId,
-            price: (BigInt(listing.price) / BigInt(10 ** 18)).toString(),
+            price: priceNum.toFixed(4),
             type: 'buyNow',
             seller: listing.seller,
           });
