@@ -1314,3 +1314,119 @@ body {
     font-size: 11px;
   }
 }
+
+/* Not for sale status indicator */
+.artwork-status {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+  margin-top: 2px;
+}
+
+/* Popup price section */
+.popup-price {
+  background: rgba(0, 123, 255, 0.1);
+  border: 1px solid rgba(0, 123, 255, 0.3);
+  padding: 12px 16px;
+  border-radius: 12px;
+  margin: 16px 0;
+  font-size: 15px;
+  color: white;
+  text-align: center;
+}
+
+.popup-price strong {
+  color: rgba(0, 123, 255, 0.9);
+  margin-right: 8px;
+}
+
+.popup-price span {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+}
+
+/* Not for sale notice in popup */
+.not-for-sale-notice {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 14px 20px;
+  border-radius: 20px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  text-align: center;
+  font-style: italic;
+  margin-top: 20px;
+}
+
+/* Adjust artwork card when no price */
+.artwork-card .artwork-image-container {
+  position: relative;
+}
+
+.artwork-card .price-overlay {
+  /* Only show when price exists */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Empty state improvements */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.empty-state h2 {
+  font-size: 28px;
+  color: white;
+  margin-bottom: 16px;
+}
+
+.empty-state p {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 32px;
+  line-height: 1.5;
+}
+
+.empty-state-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.empty-state-btn {
+  padding: 14px 28px;
+  background: rgba(0, 123, 255, 0.9);
+  color: white;
+  border: none;
+  border-radius: 25px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.empty-state-btn:hover {
+  background: rgba(0, 123, 255, 1);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4);
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .artwork-status {
+    font-size: 9px;
+  }
+  
+  .popup-price {
+    font-size: 14px;
+    padding: 10px 14px;
+  }
+  
+  .not-for-sale-notice {
+    font-size: 13px;
+    padding: 12px 16px;
+  }
+}
