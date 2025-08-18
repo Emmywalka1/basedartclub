@@ -1,9 +1,9 @@
-// app/page.tsx - COMPLETE FILE WITH GRID, POPUP, SEARCH, AND ADD ADDRESS
+// app/page.tsx - Updated to handle NFTs without prices
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
 import { sdk } from '@farcaster/frame-sdk';
-import AddAddressSection, { UserAddress } from '../components/AddAddressSection';
+import AddAddressSection from '../components/AddAddressSection';
 
 // Types
 interface NFTAsset {
@@ -24,7 +24,7 @@ interface NFTAsset {
   };
   metadata?: any;
   marketplace?: string;
-  price: {
+  price?: {
     value: string;
     currency: string;
   };
@@ -35,7 +35,6 @@ interface NFTAsset {
 }
 
 export default function Home() {
-  // Original states
   const [artworks, setArtworks] = useState<NFTAsset[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -50,9 +49,7 @@ export default function Home() {
   const [filteredArtworks, setFilteredArtworks] = useState<NFTAsset[]>([]);
   const [availableArtists, setAvailableArtists] = useState<string[]>([]);
   const [showArtistList, setShowArtistList] = useState(false);
-  
-  // NEW: State for showing/hiding add address section
-  const [showAddSection, setShowAddSection] = useState(false);
+  const [showAddAddress, setShowAddAddress] = useState(false);
   
   const ITEMS_PER_PAGE = 4;
   
@@ -80,7 +77,8 @@ export default function Home() {
       const search = term.toLowerCase().trim();
       const filtered = artworks.filter(nft => {
         const artist = (nft.artist || '').toLowerCase();
-        return artist.includes(search);
+        const name = (nft.name || '').toLowerCase();
+        return artist.includes(search) || name.includes(search);
       });
       setFilteredArtworks(filtered);
     }
@@ -95,13 +93,13 @@ export default function Home() {
     setShowArtistList(false);
   };
 
-  // Handle artist selection from list
+  // Handle artist selection
   const selectArtist = (artist: string) => {
     handleSearch(artist);
     setShowArtistList(false);
   };
 
-  // Preload images for better performance
+  // Preload images
   const preloadImages = useCallback((artworksToCache: NFTAsset[]) => {
     artworksToCache.forEach(artwork => {
       const imageUrl = artwork?.image.cachedUrl || artwork?.image.originalUrl || artwork?.image.thumbnailUrl;
@@ -141,7 +139,7 @@ export default function Home() {
     initializeApp();
   }, []);
 
-  // Update filtered artworks when all artworks change
+  // Update filtered artworks when artworks change
   useEffect(() => {
     if (!isSearching) {
       setFilteredArtworks(artworks);
@@ -168,33 +166,28 @@ export default function Home() {
     }
   }, [filteredArtworks, currentPage, preloadImages]);
 
-  const loadArtworks = async (includeUserAddresses: boolean = true) => {
+  const loadArtworks = async () => {
     try {
       setIsLoading(true);
       setError(null);
       
-      console.log('⚡ Loading artworks...');
-      
-      // Get user addresses from localStorage if we should include them
+      // Get user addresses from localStorage
+      const savedAddresses = localStorage.getItem('userAddresses');
       let userAddressesParam = '';
-      if (includeUserAddresses) {
-        const savedAddresses = localStorage.getItem('userAddresses');
-        if (savedAddresses) {
-          userAddressesParam = `&userAddresses=${encodeURIComponent(savedAddresses)}`;
-        }
+      
+      if (savedAddresses) {
+        userAddressesParam = `&userAddresses=${encodeURIComponent(savedAddresses)}`;
       }
       
+      console.log('⚡ Loading artworks...');
       const response = await fetch(`/api/nfts?action=curated&limit=40${userAddressesParam}`);
       const data = await response.json();
       
       if (data.success && data.data && data.data.length > 0) {
         console.log(`✅ Loaded ${data.data.length} artworks`);
-        if (data.includesUserContent) {
-          console.log('✅ Including user-added collections');
-        }
         setArtworks(data.data);
       } else {
-        setError('No artworks found.');
+        setError('No artworks found. Add your contract addresses to get started!');
         setArtworks([]);
       }
       
@@ -207,12 +200,6 @@ export default function Home() {
     }
   };
 
-  // NEW: Handler for when user adds a new address
-  const handleAddressAdded = () => {
-    console.log('New address added, reloading artworks...');
-    loadArtworks(true); // Reload with user addresses
-  };
-
   const handleArtworkClick = (artwork: NFTAsset) => {
     setSelectedArtwork(artwork);
   };
@@ -222,6 +209,11 @@ export default function Home() {
   };
 
   const handleCollectArtwork = async (artwork: NFTAsset) => {
+    if (!artwork.isForSale || !artwork.price) {
+      alert('This artwork is not currently for sale.');
+      return;
+    }
+    
     try {
       setIsCollecting(true);
       
@@ -229,7 +221,7 @@ export default function Home() {
         `🎨 Collect "${artwork.name}"\n\n` +
         `👨‍🎨 Artist: ${artwork.artist}\n` +
         `💰 Price: ${artwork.price.value} ${artwork.price.currency}\n` +
-        `🏪 Platform: ${artwork.platform}\n\n` +
+        `🏪 Platform: ${artwork.marketplace || artwork.platform}\n\n` +
         `Proceed with purchase?`
       );
       
@@ -248,10 +240,6 @@ export default function Home() {
               `👨‍🎨 Supporting: ${artwork.artist}`);
         
         setSelectedArtwork(null);
-        
-        setArtworks(prev => prev.filter(art => 
-          !(art.contract.address === artwork.contract.address && art.tokenId === artwork.tokenId)
-        ));
       }
     } catch (error) {
       console.error('Failed to collect artwork:', error);
@@ -264,8 +252,6 @@ export default function Home() {
   const handleNextPage = () => {
     if (hasNextPage()) {
       setCurrentPage(prev => prev + 1);
-    } else if (!isSearching) {
-      loadArtworks();
     }
   };
 
@@ -273,6 +259,11 @@ export default function Home() {
     if (currentPage > 0) {
       setCurrentPage(prev => prev - 1);
     }
+  };
+
+  const handleAddressAdded = () => {
+    // Reload artworks when a new address is added
+    loadArtworks();
   };
 
   if (isLoading) {
@@ -286,158 +277,74 @@ export default function Home() {
     );
   }
 
-  if (error || artworks.length === 0) {
-    return (
-      <div className="grid-container">
-        <div className="loading-center">
-          <h3>No artworks available</h3>
-          <p style={{ margin: '16px 0', textAlign: 'center', color: '#64748b' }}>
-            {error || 'No artworks are currently available'}
-          </p>
-          <button 
-            onClick={() => loadArtworks()}
-            className="refresh-btn"
-          >
-            Refresh
-          </button>
-          <p style={{ marginTop: '20px', fontSize: '14px', color: '#94a3b8' }}>
-            Or add your own art collection below:
-          </p>
-          <div style={{ marginTop: '20px', width: '100%', maxWidth: '400px' }}>
-            <AddAddressSection onAddressAdded={handleAddressAdded} />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const currentPageArtworks = getCurrentPageArtworks();
 
-  if (currentPageArtworks.length === 0 && isSearching) {
+  if (currentPageArtworks.length === 0 && !showAddAddress) {
     return (
       <div className="grid-container">
         <div className="grid-header">
           <h1>🎨 Base Art Club</h1>
-          <div className="page-indicator">
-            {filteredArtworks.length} artworks found
-          </div>
         </div>
-
-        {/* SEARCH SECTION */}
-        <div className="search-section">
-          <div className="search-container">
-            <input
-              type="text"
-              placeholder="Search by artist name..."
-              value={searchTerm}
-              onChange={(e) => handleSearch(e.target.value)}
-              className="search-input"
-            />
-            {searchTerm && (
-              <button onClick={clearSearch} className="clear-search-btn">
-                ×
+        
+        <div className="loading-center">
+          <h3>{isSearching ? 'No artworks found' : 'Welcome to Base Art Club'}</h3>
+          <p style={{ margin: '16px 0', textAlign: 'center', color: '#64748b' }}>
+            {isSearching 
+              ? `No artworks found for "${searchTerm}"`
+              : 'Add your NFT contract address to start displaying your art'}
+          </p>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            {isSearching ? (
+              <button onClick={clearSearch} className="refresh-btn">
+                Clear Search
+              </button>
+            ) : (
+              <button onClick={() => setShowAddAddress(true)} className="refresh-btn">
+                Add Contract
               </button>
             )}
           </div>
-          {availableArtists.length > 0 && (
-            <button 
-              onClick={() => setShowArtistList(!showArtistList)}
-              className="view-artists-btn"
-            >
-              {showArtistList ? 'Hide' : 'View'} Artists ({availableArtists.length})
-            </button>
-          )}
-          {showArtistList && (
-            <div className="artist-list">
-              {availableArtists.map(artist => (
-                <button
-                  key={artist}
-                  onClick={() => selectArtist(artist)}
-                  className="artist-tag"
-                >
-                  {artist}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
-
-        <div className="loading-center">
-          <h3>No artworks found</h3>
-          <p style={{ margin: '16px 0', textAlign: 'center', color: '#64748b' }}>
-            No artworks found for artist "{searchTerm}"
-          </p>
-          <button 
-            onClick={clearSearch}
-            className="refresh-btn"
-          >
-            Clear Search
-          </button>
-        </div>
+        
+        {showAddAddress && (
+          <AddAddressSection onAddressAdded={handleAddressAdded} />
+        )}
       </div>
     );
   }
 
-  if (currentPageArtworks.length === 0) {
-    return (
-      <div className="grid-container">
-        <div className="loading-center">
-          <h3>All artworks viewed!</h3>
-          <button 
-            onClick={() => setCurrentPage(0)}
-            className="refresh-btn"
-          >
-            Start Over
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // MAIN RETURN WITH ALL FEATURES
   return (
     <div className="grid-container">
-      {/* HEADER */}
+      {/* Header */}
       <div className="grid-header">
         <h1>🎨 Base Art Club</h1>
         <div className="page-indicator">
           Page {currentPage + 1} • {filteredArtworks.length} artworks
           {isSearching && ` • Searching: "${searchTerm}"`}
         </div>
-        {/* NEW: Toggle button for Add Address Section */}
+      </div>
+
+      {/* Add Address Section Toggle */}
+      <div style={{ textAlign: 'center', marginBottom: '20px' }}>
         <button 
-          onClick={() => setShowAddSection(!showAddSection)}
-          className="add-toggle-main"
-          style={{
-            marginTop: '10px',
-            padding: '8px 16px',
-            background: showAddSection ? 'rgba(239, 68, 68, 0.2)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '20px',
-            fontSize: '13px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            transition: 'all 0.3s ease',
-          }}
+          onClick={() => setShowAddAddress(!showAddAddress)}
+          className="view-artists-btn"
         >
-          {showAddSection ? '✕ Close' : '+ Add Your Art'}
+          {showAddAddress ? 'Hide' : '+'} Add Your Contract
         </button>
       </div>
 
-      {/* NEW: ADD ADDRESS SECTION - Now properly integrated */}
-      {showAddSection && (
-        <div style={{ marginBottom: '20px' }}>
-          <AddAddressSection onAddressAdded={handleAddressAdded} />
-        </div>
+      {/* Add Address Section */}
+      {showAddAddress && (
+        <AddAddressSection onAddressAdded={handleAddressAdded} />
       )}
 
-      {/* SEARCH SECTION */}
+      {/* Search Section */}
       <div className="search-section">
         <div className="search-container">
           <input
             type="text"
-            placeholder="Search by artist name..."
+            placeholder="Search by artist or name..."
             value={searchTerm}
             onChange={(e) => handleSearch(e.target.value)}
             className="search-input"
@@ -471,9 +378,9 @@ export default function Home() {
         )}
       </div>
 
-      {/* GRID OF ARTWORKS */}
+      {/* Grid of Artworks */}
       <div className="artworks-grid">
-        {currentPageArtworks.map((artwork, index) => {
+        {currentPageArtworks.map((artwork) => {
           const imageUrl = artwork.image.cachedUrl || artwork.image.originalUrl || artwork.image.thumbnailUrl;
           const isImageLoaded = imageCache.has(imageUrl || '');
 
@@ -497,20 +404,25 @@ export default function Home() {
                     opacity: isImageLoaded ? 1 : 0.3,
                   }}
                 />
-                <div className="price-overlay">
-                  {artwork.price.value} {artwork.price.currency}
-                </div>
+                {artwork.isForSale && artwork.price && (
+                  <div className="price-overlay">
+                    {artwork.price.value} {artwork.price.currency}
+                  </div>
+                )}
               </div>
               <div className="artwork-text-below">
                 <div className="artwork-name">{artwork.name || `Token #${artwork.tokenId}`}</div>
                 <div className="artwork-artist">by {artwork.artist || 'Unknown'}</div>
+                {!artwork.isForSale && (
+                  <div className="artwork-status">Not for sale</div>
+                )}
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* NAVIGATION */}
+      {/* Navigation */}
       <div className="grid-navigation">
         <button 
           onClick={handlePreviousPage}
@@ -522,13 +434,14 @@ export default function Home() {
         
         <button 
           onClick={handleNextPage}
+          disabled={!hasNextPage()}
           className="nav-btn next-btn"
         >
-          {hasNextPage() ? 'Pass →' : (isSearching ? 'No More' : 'Load More →')}
+          {hasNextPage() ? 'Next →' : 'End'}
         </button>
       </div>
 
-      {/* POPUP MODAL */}
+      {/* Popup Modal */}
       {selectedArtwork && (
         <div className="popup-overlay" onClick={handleClosePopup}>
           <div className="popup-content" onClick={(e) => e.stopPropagation()}>
@@ -558,15 +471,30 @@ export default function Home() {
                   {selectedArtwork.description.length > 200 ? '...' : ''}
                 </p>
               )}
+              
+              {selectedArtwork.isForSale && selectedArtwork.price && (
+                <div className="popup-price">
+                  <strong>Price:</strong> {selectedArtwork.price.value} {selectedArtwork.price.currency}
+                  {selectedArtwork.marketplace && (
+                    <span> on {selectedArtwork.marketplace}</span>
+                  )}
+                </div>
+              )}
             </div>
             
-            <button 
-              className="collect-btn-popup"
-              onClick={() => handleCollectArtwork(selectedArtwork)}
-              disabled={isCollecting}
-            >
-              {isCollecting ? 'Processing...' : `Collect (${selectedArtwork.price.value} ${selectedArtwork.price.currency})`}
-            </button>
+            {selectedArtwork.isForSale && selectedArtwork.price ? (
+              <button 
+                className="collect-btn-popup"
+                onClick={() => handleCollectArtwork(selectedArtwork)}
+                disabled={isCollecting}
+              >
+                {isCollecting ? 'Processing...' : `Collect (${selectedArtwork.price.value} ${selectedArtwork.price.currency})`}
+              </button>
+            ) : (
+              <div className="not-for-sale-notice">
+                This artwork is not currently for sale
+              </div>
+            )}
           </div>
         </div>
       )}
