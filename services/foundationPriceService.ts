@@ -524,7 +524,7 @@ export class FoundationPriceService {
       );
 
       const data = response.data?.data;
-      const listings = [];
+      const listings: any[] = [];
       
       // Process auctions
       if (data?.nftMarketAuctions) {
