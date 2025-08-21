@@ -1,18 +1,17 @@
 {
   "name": "base-art-club",
   "version": "1.0.0",
-  "description": "A Tinder-style swipe app for discovering 1/1 artworks on Base blockchain",
+  "description": "A Tinder-style swipe app for discovering artworks on Base blockchain",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "discover": "node scripts/discover-base-art.js",
-    "test-api": "node scripts/test-api.js"
+    "lint": "next lint"
   },
   "dependencies": {
     "@farcaster/frame-sdk": "0.0.5",
-    "axios": "^1.11.0",
+    "@vercel/kv": "^2.0.0",
+    "axios": "^1.7.0",
     "framer-motion": "10.18.0",
     "next": "^14.2.30",
     "react": "18.3.1",
@@ -31,8 +30,9 @@
     "art",
     "base",
     "nft",
-    "1/1",
-    "blockchain"
+    "blockchain",
+    "vercel-kv",
+    "redis"
   ],
   "author": "Base Art Club",
   "license": "MIT"
