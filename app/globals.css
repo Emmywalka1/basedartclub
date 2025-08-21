@@ -1430,3 +1430,178 @@ body {
     padding: 12px 16px;
   }
 }
+
+/* Stats Bar */
+.stats-bar {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(59, 130, 246, 0.1));
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  padding: 10px 16px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+  text-align: center;
+  animation: fadeIn 0.3s ease;
+}
+
+.stats-bar span {
+  margin: 0 4px;
+}
+
+/* Loading contracts state */
+.loading-contracts {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  margin: 16px 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+}
+
+/* Empty state message */
+.empty-state-message {
+  text-align: center;
+  padding: 32px 20px;
+  background: rgba(0, 123, 255, 0.05);
+  border: 1px dashed rgba(0, 123, 255, 0.2);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  margin: 16px 0;
+  animation: fadeIn 0.3s ease;
+}
+
+/* Wallet badge */
+.wallet-badge {
+  display: inline-block;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: rgba(34, 197, 94, 0.9);
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+/* Address date */
+.address-date {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+  font-style: italic;
+}
+
+/* Enhanced address name */
+.address-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* KV Storage indicator in list header */
+.list-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.list-subtitle {
+  font-size: 11px;
+  color: rgba(139, 92, 246, 0.7);
+  font-weight: 500;
+  font-style: normal;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.list-subtitle:before {
+  content: "⚡";
+  font-size: 12px;
+}
+
+/* Enhanced info box for KV */
+.info-box {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.05), rgba(0, 123, 255, 0.05));
+  border: 1px solid rgba(139, 92, 246, 0.15);
+}
+
+.info-title {
+  color: rgba(139, 92, 246, 0.9);
+}
+
+/* Pulse animation for new additions */
+@keyframes pulseGlow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(139, 92, 246, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0);
+  }
+}
+
+.user-address-item.new-addition {
+  animation: pulseGlow 2s ease-out;
+  border-left: 3px solid rgba(139, 92, 246, 0.5);
+}
+
+/* Database connection error */
+.db-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  padding: 12px 16px;
+  border-radius: 12px;
+  margin: 16px 0;
+  font-size: 13px;
+  text-align: center;
+}
+
+.db-error a {
+  color: #f87171;
+  text-decoration: underline;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .stats-bar {
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+  
+  .wallet-badge {
+    font-size: 9px;
+    padding: 1px 4px;
+  }
+  
+  .address-date {
+    display: block;
+    margin-top: 2px;
+  }
+  
+  .loading-contracts {
+    font-size: 13px;
+    padding: 20px;
+  }
+  
+  .empty-state-message {
+    font-size: 13px;
+    padding: 24px 16px;
+  }
+}
