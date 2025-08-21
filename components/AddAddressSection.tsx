@@ -1,4 +1,4 @@
-// components/AddAddressSection.tsx
+// components/AddAddressSection.tsx - With Vercel KV integration
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,12 +7,12 @@ interface AddAddressSectionProps {
   onAddressAdded: () => void;
 }
 
-export interface UserAddress {
+interface ContractDetails {
   address: string;
-  name: string;
-  type: 'contract' | 'wallet';
+  name?: string;
+  addedBy?: string;
   addedAt: string;
-  enabled: boolean;
+  type: 'contract' | 'wallet';
 }
 
 export default function AddAddressSection({ onAddressAdded }: AddAddressSectionProps) {
@@ -20,28 +20,48 @@ export default function AddAddressSection({ onAddressAdded }: AddAddressSectionP
   const [addressInput, setAddressInput] = useState('');
   const [nameInput, setNameInput] = useState('');
   const [addressType, setAddressType] = useState<'contract' | 'wallet'>('contract');
-  const [userAddresses, setUserAddresses] = useState<UserAddress[]>([]);
+  const [contractDetails, setContractDetails] = useState<ContractDetails[]>([]);
   const [isValidating, setIsValidating] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [stats, setStats] = useState<any>(null);
 
-  // Load saved addresses from localStorage
+  // Load contracts from KV storage on mount
   useEffect(() => {
-    const saved = localStorage.getItem('userAddresses');
-    if (saved) {
-      try {
-        setUserAddresses(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to load saved addresses');
-      }
-    }
+    loadContracts();
+    loadStats();
   }, []);
 
-  // Save addresses to localStorage whenever they change
-  useEffect(() => {
-    if (userAddresses.length > 0) {
-      localStorage.setItem('userAddresses', JSON.stringify(userAddresses));
+  const loadContracts = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/nfts?action=list-contracts');
+      const data = await response.json();
+      
+      if (data.success) {
+        setContractDetails(data.contractDetails || []);
+        console.log(`📊 Loaded ${data.totalContracts} contracts from KV storage`);
+      }
+    } catch (error) {
+      console.error('Failed to load contracts:', error);
+      setError('Failed to load contracts from database');
+    } finally {
+      setIsLoading(false);
     }
-  }, [userAddresses]);
+  };
+
+  const loadStats = async () => {
+    try {
+      const response = await fetch('/api/nfts?action=stats');
+      const data = await response.json();
+      if (data.success) {
+        setStats(data.stats);
+      }
+    } catch (error) {
+      console.error('Failed to load stats:', error);
+    }
+  };
 
   // Validate Ethereum address format
   const isValidAddress = (address: string): boolean => {
@@ -51,6 +71,7 @@ export default function AddAddressSection({ onAddressAdded }: AddAddressSectionP
   // Add new address
   const handleAddAddress = async () => {
     setError('');
+    setSuccessMessage('');
     
     // Validate inputs
     if (!addressInput || !nameInput) {
@@ -63,93 +84,171 @@ export default function AddAddressSection({ onAddressAdded }: AddAddressSectionP
       return;
     }
 
-    // Check if already exists
-    if (userAddresses.some(a => a.address.toLowerCase() === addressInput.toLowerCase())) {
-      setError('This address has already been added');
-      return;
-    }
-
     setIsValidating(true);
 
     try {
-      // Validate that the address exists and has NFTs
-      const response = await fetch(`/api/validate-address?address=${addressInput}&type=${addressType}`);
-      const data = await response.json();
+      // First validate the address has NFTs
+      const validateResponse = await fetch(
+        `/api/validate-address?address=${addressInput}&type=${addressType}`
+      );
+      const validateData = await validateResponse.json();
 
-      if (!data.valid) {
-        setError(data.message || 'Address validation failed');
+      if (!validateData.valid) {
+        setError(validateData.message || 'Address validation failed');
         setIsValidating(false);
         return;
       }
 
-      // Add to list
-      const newAddress: UserAddress = {
-        address: addressInput,
-        name: nameInput,
-        type: addressType,
-        addedAt: new Date().toISOString(),
-        enabled: true
-      };
-
-      setUserAddresses([...userAddresses, newAddress]);
+      // Add to KV storage based on type
+      if (addressType === 'contract') {
+        // Add single contract
+        const addResponse = await fetch(
+          `/api/nfts?action=add-contract&address=${addressInput}&name=${encodeURIComponent(nameInput)}`
+        );
+        const addData = await addResponse.json();
+        
+        if (!addData.success) {
+          setError('Failed to add contract to database');
+          setIsValidating(false);
+          return;
+        }
+        
+        if (addData.isNew) {
+          setSuccessMessage(`✅ Contract "${nameInput}" added successfully! Everyone can now see these artworks.`);
+        } else {
+          setSuccessMessage(`ℹ️ Contract already exists in the database.`);
+        }
+        
+      } else {
+        // Add wallet (extracts and adds all contracts from wallet)
+        const walletResponse = await fetch(
+          `/api/nfts?action=from-wallet&wallet=${addressInput}&name=${encodeURIComponent(nameInput)}`
+        );
+        const walletData = await walletResponse.json();
+        
+        if (walletData.success && walletData.contractsAdded) {
+          const count = walletData.contractsAdded.length;
+          if (count > 0) {
+            setSuccessMessage(`✅ Added ${count} contract${count > 1 ? 's' : ''} from wallet "${nameInput}"`);
+          } else {
+            setError('No NFT contracts found in this wallet');
+            setIsValidating(false);
+            return;
+          }
+        } else {
+          setError('Failed to process wallet');
+          setIsValidating(false);
+          return;
+        }
+      }
       
       // Reset form
       setAddressInput('');
       setNameInput('');
       setShowAddForm(false);
       
+      // Reload contracts list and stats
+      await loadContracts();
+      await loadStats();
+      
       // Notify parent to refresh artworks
-      onAddressAdded();
+      setTimeout(() => {
+        onAddressAdded();
+        setSuccessMessage('');
+      }, 3000);
       
     } catch (error) {
-      setError('Failed to validate address. Please try again.');
+      console.error('Error adding address:', error);
+      setError('Failed to add address. Please try again.');
     } finally {
       setIsValidating(false);
     }
   };
 
-  // Remove address
-  const handleRemoveAddress = (address: string) => {
-    const confirmed = confirm('Remove this address from your list?');
-    if (confirmed) {
-      setUserAddresses(userAddresses.filter(a => a.address !== address));
-      // Clear from localStorage if no addresses left
-      if (userAddresses.length === 1) {
-        localStorage.removeItem('userAddresses');
+  // Remove contract from KV storage
+  const handleRemoveContract = async (address: string) => {
+    const confirmed = confirm('Remove this contract? This will affect all users.');
+    if (!confirmed) return;
+    
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/nfts?action=remove-contract&address=${address}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setSuccessMessage('Contract removed successfully');
+        await loadContracts();
+        await loadStats();
+        onAddressAdded(); // Refresh artworks
+        
+        setTimeout(() => setSuccessMessage(''), 3000);
+      } else {
+        setError('Failed to remove contract');
       }
-      onAddressAdded(); // Refresh artworks
+    } catch (error) {
+      console.error('Failed to remove contract:', error);
+      setError('Failed to remove contract');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Toggle address enabled/disabled
-  const handleToggleAddress = (address: string) => {
-    setUserAddresses(userAddresses.map(a => 
-      a.address === address ? { ...a, enabled: !a.enabled } : a
-    ));
-    onAddressAdded(); // Refresh artworks
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   return (
     <div className="add-address-section">
+      {/* Success Message */}
+      {successMessage && (
+        <div className="success-message">
+          {successMessage}
+        </div>
+      )}
+
+      {/* Error Message */}
+      {error && (
+        <div className="error-message">
+          {error}
+        </div>
+      )}
+
+      {/* Stats Bar */}
+      {stats && (
+        <div className="stats-bar">
+          <span>📊 {stats.currentContracts || 0} Active Contracts</span>
+          {stats.totalContractsAdded && (
+            <span> • Total Added: {stats.totalContractsAdded}</span>
+          )}
+        </div>
+      )}
+
       {/* Toggle Add Form Button */}
       <button 
         onClick={() => setShowAddForm(!showAddForm)}
         className="add-address-toggle-btn"
       >
-        {showAddForm ? '✕ Cancel' : '+ Add Your Art'}
+        {showAddForm ? '✕ Cancel' : '+ Add Contract or Wallet'}
       </button>
 
       {/* Add Form */}
       {showAddForm && (
         <div className="add-address-form">
           <div className="form-group">
-            <label>Artist/Collection Name</label>
+            <label>Name/Description</label>
             <input
               type="text"
-              placeholder="e.g., My Art Collection"
+              placeholder="e.g., My Art Collection, Artist Name"
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
               className="address-input"
+              maxLength={100}
             />
           </div>
 
@@ -160,13 +259,13 @@ export default function AddAddressSection({ onAddressAdded }: AddAddressSectionP
                 className={`type-btn ${addressType === 'contract' ? 'active' : ''}`}
                 onClick={() => setAddressType('contract')}
               >
-                Contract
+                NFT Contract
               </button>
               <button
                 className={`type-btn ${addressType === 'wallet' ? 'active' : ''}`}
                 onClick={() => setAddressType('wallet')}
               >
-                Wallet
+                Wallet Address
               </button>
             </div>
           </div>
@@ -183,50 +282,53 @@ export default function AddAddressSection({ onAddressAdded }: AddAddressSectionP
             />
             <div className="input-hint">
               {addressType === 'contract' 
-                ? 'Enter your NFT contract address on Base'
-                : 'Enter your wallet address to show NFTs you own'}
+                ? '📄 NFT contract address on Base. Stored in database for all users.'
+                : '👛 Wallet address containing NFTs. All contracts from this wallet will be added.'}
             </div>
           </div>
-
-          {error && (
-            <div className="error-message">
-              {error}
-            </div>
-          )}
 
           <button 
             onClick={handleAddAddress}
             disabled={isValidating || !addressInput || !nameInput}
             className="submit-address-btn"
           >
-            {isValidating ? 'Validating...' : 'Add Address'}
+            {isValidating ? 'Validating...' : `Add ${addressType === 'contract' ? 'Contract' : 'Wallet'}`}
           </button>
         </div>
       )}
 
-      {/* List of Added Addresses */}
-      {userAddresses.length > 0 && (
+      {/* List of Contracts from KV Storage */}
+      {isLoading ? (
+        <div className="loading-contracts">
+          <div className="mini-spinner"></div>
+          <span>Loading contracts from database...</span>
+        </div>
+      ) : contractDetails.length > 0 ? (
         <div className="user-addresses-list">
-          <div className="list-header">Your Added Collections</div>
-          {userAddresses.map((addr) => (
-            <div key={addr.address} className="user-address-item">
+          <div className="list-header">
+            Active Contracts ({contractDetails.length})
+            <span className="list-subtitle">Stored in Vercel KV • Visible to all users</span>
+          </div>
+          {contractDetails.map((contract) => (
+            <div key={contract.address} className="user-address-item">
               <div className="address-info">
-                <div className="address-name">{addr.name}</div>
+                <div className="address-name">
+                  {contract.name || 'Unnamed Contract'}
+                  {contract.type === 'wallet' && (
+                    <span className="wallet-badge">from wallet</span>
+                  )}
+                </div>
                 <div className="address-details">
-                  {addr.type === 'contract' ? '📄' : '👛'} 
-                  {' ' + addr.address.slice(0, 6)}...{addr.address.slice(-4)}
+                  📄 {contract.address.slice(0, 6)}...{contract.address.slice(-4)}
+                  <span className="address-date"> • {formatDate(contract.addedAt)}</span>
                 </div>
               </div>
               <div className="address-actions">
                 <button
-                  onClick={() => handleToggleAddress(addr.address)}
-                  className={`toggle-btn ${addr.enabled ? 'enabled' : 'disabled'}`}
-                >
-                  {addr.enabled ? '✓' : '○'}
-                </button>
-                <button
-                  onClick={() => handleRemoveAddress(addr.address)}
+                  onClick={() => handleRemoveContract(contract.address)}
                   className="remove-btn"
+                  disabled={isLoading}
+                  title="Remove from database"
                 >
                   ✕
                 </button>
@@ -234,7 +336,23 @@ export default function AddAddressSection({ onAddressAdded }: AddAddressSectionP
             </div>
           ))}
         </div>
+      ) : (
+        <div className="empty-state-message">
+          No contracts added yet. Be the first to add your NFT contract!
+        </div>
       )}
+
+      {/* Info Box */}
+      <div className="info-box">
+        <div className="info-title">ℹ️ How it works with Vercel KV</div>
+        <ul className="info-list">
+          <li><strong>Persistent Storage:</strong> All contracts are stored in Vercel KV (Redis)</li>
+          <li><strong>Global Access:</strong> Everyone sees the same contracts</li>
+          <li><strong>Contract Address:</strong> Adds all NFTs from that contract</li>
+          <li><strong>Wallet Address:</strong> Automatically finds and adds all NFT contracts</li>
+          <li><strong>Real Prices Only:</strong> Only shows marketplace prices, no estimates</li>
+        </ul>
+      </div>
     </div>
   );
 }
