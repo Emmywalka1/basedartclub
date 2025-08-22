@@ -100,8 +100,8 @@ export async function GET(request: NextRequest) {
 
       case 'add-contract': {
         const contractAddress = searchParams.get('address');
-        const name = searchParams.get('name');
-        const addedBy = searchParams.get('addedBy');
+        const name = searchParams.get('name') || undefined;
+        const addedBy = searchParams.get('addedBy') || undefined;
         
         if (!contractAddress) {
           return NextResponse.json(
@@ -185,8 +185,8 @@ export async function GET(request: NextRequest) {
 
       case 'from-wallet': {
         const walletAddress = searchParams.get('wallet');
-        const walletName = searchParams.get('name');
-        const addedBy = searchParams.get('addedBy');
+        const walletName = searchParams.get('name') || undefined;
+        const addedBy = searchParams.get('addedBy') || undefined;
         
         if (!walletAddress) {
           return NextResponse.json(
