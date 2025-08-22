@@ -342,17 +342,7 @@ export default function AddAddressSection({ onAddressAdded }: AddAddressSectionP
         </div>
       )}
 
-      {/* Info Box */}
-      <div className="info-box">
-        <div className="info-title">ℹ️ How it works with Vercel KV</div>
-        <ul className="info-list">
-          <li><strong>Persistent Storage:</strong> All contracts are stored in Vercel KV (Redis)</li>
-          <li><strong>Global Access:</strong> Everyone sees the same contracts</li>
-          <li><strong>Contract Address:</strong> Adds all NFTs from that contract</li>
-          <li><strong>Wallet Address:</strong> Automatically finds and adds all NFT contracts</li>
-          <li><strong>Real Prices Only:</strong> Only shows marketplace prices, no estimates</li>
-        </ul>
-      </div>
+      {/* Info Box - Removed for cleaner UI */}
     </div>
   );
 }
