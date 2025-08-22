@@ -225,7 +225,14 @@ export class KVStorage {
   static async getStats(): Promise<Record<string, number>> {
     try {
       const stats = await kv.hgetall(this.STATS_KEY);
-      return stats || {};
+      if (!stats) return {};
+      
+      // Convert all values to numbers
+      const numberStats: Record<string, number> = {};
+      for (const [key, value] of Object.entries(stats)) {
+        numberStats[key] = typeof value === 'number' ? value : parseInt(String(value)) || 0;
+      }
+      return numberStats;
     } catch (error) {
       console.error('Error getting stats:', error);
       return {};
