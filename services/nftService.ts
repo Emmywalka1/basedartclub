@@ -112,42 +112,67 @@ export class NFTService {
   }
 
   // Fetch NFTs from a wallet address
-  static async fetchWalletNFTs(walletAddress: string, limit: number = 20): Promise<NFTAsset[]> {
+  static async fetchWalletNFTs(walletAddress: string, limit: number = 100): Promise<NFTAsset[]> {
     try {
       console.log(`⚡ Fetching NFTs from wallet ${walletAddress}...`);
       
-      const response = await axios.get(
-        `${ALCHEMY_BASE_URL}/getNFTsForOwner`,
-        {
-          params: {
-            owner: walletAddress,
-            withMetadata: true,
-            pageSize: limit,
-            excludeFilters: ['SPAM'],
-          },
-          timeout: 10000,
-        }
-      );
+      // Try with spam filter first
+      let response;
+      try {
+        response = await axios.get(
+          `${ALCHEMY_BASE_URL}/getNFTsForOwner`,
+          {
+            params: {
+              owner: walletAddress,
+              withMetadata: true,
+              pageSize: limit,
+              excludeFilters: ['SPAM'],
+            },
+            timeout: 15000,
+          }
+        );
+      } catch (error) {
+        console.log('⚠️ Retrying without spam filter...');
+        // Retry without spam filter
+        response = await axios.get(
+          `${ALCHEMY_BASE_URL}/getNFTsForOwner`,
+          {
+            params: {
+              owner: walletAddress,
+              withMetadata: true,
+              pageSize: limit,
+            },
+            timeout: 15000,
+          }
+        );
+      }
       
       if (!response.data?.ownedNfts?.length) {
-        console.log(`❌ No NFTs found in wallet ${walletAddress}`);
+        console.log(`⚠️ No NFTs found in wallet ${walletAddress} on Base chain`);
+        // The wallet might have NFTs on other chains
         return [];
       }
       
       const nfts: NFTAsset[] = [];
+      const processedContracts = new Set<string>();
       
       for (const nft of response.data.ownedNfts) {
+        // Track unique contracts
+        if (nft.contract?.address) {
+          processedContracts.add(nft.contract.address.toLowerCase());
+        }
+        
         const formatted = await this.formatNFT(nft, nft.contract.address);
         if (formatted) {
           nfts.push(formatted);
         }
       }
       
-      console.log(`✅ Found ${nfts.length} NFTs from wallet`);
+      console.log(`✅ Found ${nfts.length} NFTs from ${processedContracts.size} unique contracts in wallet`);
       return nfts;
       
-    } catch (error) {
-      console.error(`❌ Error fetching wallet NFTs:`, error);
+    } catch (error: any) {
+      console.error(`❌ Error fetching wallet NFTs:`, error?.message || error);
       return [];
     }
   }
