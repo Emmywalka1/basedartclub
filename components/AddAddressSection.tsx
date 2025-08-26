@@ -87,56 +87,51 @@ export default function AddAddressSection({ onAddressAdded }: AddAddressSectionP
     setIsValidating(true);
 
     try {
-      // First validate the address has NFTs
-      const validateResponse = await fetch(
-        `/api/validate-address?address=${addressInput}&type=${addressType}`
-      );
-      const validateData = await validateResponse.json();
-
-      if (!validateData.valid) {
-        setError(validateData.message || 'Address validation failed');
-        setIsValidating(false);
-        return;
-      }
-
-      // Add to KV storage based on type
       if (addressType === 'contract') {
-        // Add single contract
+        // Add single contract - always accept it
         const addResponse = await fetch(
           `/api/nfts?action=add-contract&address=${addressInput}&name=${encodeURIComponent(nameInput)}`
         );
         const addData = await addResponse.json();
         
-        if (!addData.success) {
-          setError('Failed to add contract to database');
+        if (addData.success) {
+          if (addData.isNew) {
+            setSuccessMessage(`✅ Contract "${nameInput}" added successfully!`);
+          } else {
+            setSuccessMessage(`ℹ️ Contract already exists in the database.`);
+          }
+        } else {
+          setError(addData.error || 'Failed to add contract');
           setIsValidating(false);
           return;
         }
         
-        if (addData.isNew) {
-          setSuccessMessage(`✅ Contract "${nameInput}" added successfully! Everyone can now see these artworks.`);
-        } else {
-          setSuccessMessage(`ℹ️ Contract already exists in the database.`);
-        }
-        
       } else {
-        // Add wallet (extracts and adds all contracts from wallet)
-        const walletResponse = await fetch(
-          `/api/nfts?action=from-wallet&wallet=${addressInput}&name=${encodeURIComponent(nameInput)}`
-        );
-        const walletData = await walletResponse.json();
+        // Process wallet using the new endpoint with fallbacks
+        const processResponse = await fetch('/api/process-wallet', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            walletAddress: addressInput,
+            name: nameInput,
+          }),
+        });
         
-        if (walletData.success && walletData.contractsAdded) {
-          const count = walletData.contractsAdded.length;
-          if (count > 0) {
-            setSuccessMessage(`✅ Added ${count} contract${count > 1 ? 's' : ''} from wallet "${nameInput}"`);
-          } else {
-            setError('No NFT contracts found in this wallet');
-            setIsValidating(false);
-            return;
-          }
+        const processData = await processResponse.json();
+        
+        if (processData.success) {
+          setSuccessMessage(
+            `✅ Added ${processData.newContracts} contract${processData.newContracts !== 1 ? 's' : ''} from wallet "${nameInput}" (Method: ${processData.method})`
+          );
         } else {
-          setError('Failed to process wallet');
+          // If wallet processing failed, show helpful message
+          setError(
+            `Could not find NFT contracts in this wallet on Base network. ` +
+            `The wallet may only have NFTs on other chains. ` +
+            `Try adding contract addresses directly instead.`
+          );
           setIsValidating(false);
           return;
         }
@@ -159,7 +154,7 @@ export default function AddAddressSection({ onAddressAdded }: AddAddressSectionP
       
     } catch (error) {
       console.error('Error adding address:', error);
-      setError('Failed to add address. Please try again.');
+      setError('Network error. Please try again.');
     } finally {
       setIsValidating(false);
     }
