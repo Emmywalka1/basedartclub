@@ -118,8 +118,8 @@ export async function GET(request: NextRequest) {
           );
         }
 
-        // Add to KV storage
-        const result = await KVStorage.addContract(contractAddress, {
+        // Add to Redis storage
+        const result = await RedisStorage.addContract(contractAddress, {
           name,
           addedBy,
           type: 'contract',
