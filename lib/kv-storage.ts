@@ -1,6 +1,14 @@
-// lib/kv-storage.ts
-import { kv } from '@vercel/kv';
+import Redis from 'ioredis';
 
+const redis = new Redis(process.env.REDIS_URL!);
+
+export class RedisStorage {
+  // Use redis client methods instead of kv
+  static async addContract(...) {
+    await redis.sadd(this.CONTRACTS_SET, normalizedAddress);
+    // etc.
+  }
+}
 export interface ContractDetails {
   address: string;
   name?: string;
