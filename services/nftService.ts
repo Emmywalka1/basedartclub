@@ -1,4 +1,4 @@
-// services/nftService.ts - Generic version without estimated prices
+// services/nftService.ts - Fixed version without estimated prices
 import axios from 'axios';
 
 const ALCHEMY_API_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY!;
@@ -582,77 +582,3 @@ export class NFTService {
     });
   }
 }
-
-// Format a single NFT with optional marketplace price
-  private static async formatNFT(nft: any, contractAddress: string): Promise<NFTAsset | null> {
-    try {
-      // Import the cross-chain service
-      const { CrossChainPriceService } = await import('./crossChainPriceService');
-      
-      // Check cross-chain prices (Base + Ethereum mainnet)
-      const crossChainPrice = await CrossChainPriceService.getBestPrice(contractAddress, nft.tokenId);
-      
-      // Get artist from Foundation if possible
-      let artist = this.extractArtistName(nft.metadata || nft.rawMetadata || {}, contractAddress);
-      if ((!artist || artist === 'Unknown Artist') && this.isFoundationContract(contractAddress)) {
-        const foundationArtist = await CrossChainPriceService.getArtistFromFoundation(contractAddress, nft.tokenId);
-        if (foundationArtist) {
-          artist = foundationArtist;
-        }
-      }
-      
-      const metadata = nft.metadata || nft.rawMetadata || {};
-      
-      // Extract image URL
-      const imageUrl = this.extractImageUrl(nft, metadata);
-      
-      if (!imageUrl) {
-        console.log(`⚠️ No image found for token ${nft.tokenId}, skipping`);
-        return null;
-      }
-      
-      // Determine sale status and marketplace
-      let saleStatus: any = { isForSale: false };
-      if (crossChainPrice && crossChainPrice.isRealPrice) {
-        saleStatus = {
-          isForSale: true,
-          price: {
-            value: crossChainPrice.value,
-            currency: crossChainPrice.currency
-          },
-          marketplace: `${crossChainPrice.marketplace}${crossChainPrice.chain === 'ethereum' ? ' (Mainnet)' : ''}`
-        };
-      } else {
-        // Fallback to Base-only check
-        saleStatus = await this.checkIfForSale(nft, contractAddress);
-      }
-      
-      return {
-        tokenId: nft.tokenId || '0',
-        tokenType: nft.tokenType || 'ERC721',
-        name: nft.name || metadata.name || `Token #${nft.tokenId}`,
-        description: nft.description || metadata.description || '',
-        image: {
-          cachedUrl: imageUrl,
-          thumbnailUrl: nft.image?.thumbnailUrl || imageUrl,
-          originalUrl: nft.image?.originalUrl || imageUrl,
-        },
-        contract: {
-          address: contractAddress,
-          name: nft.contract?.name || metadata.collection?.name || 'Collection',
-          symbol: nft.contract?.symbol || 'NFT',
-          tokenType: nft.tokenType || 'ERC721',
-        },
-        metadata: metadata,
-        marketplace: saleStatus.marketplace,
-        price: saleStatus.price, // Will be undefined if not for sale
-        artist: artist,
-        platform: this.detectPlatform(contractAddress, metadata),
-        isOneOfOne: this.checkIfOneOfOne(metadata),
-        isForSale: saleStatus.isForSale,
-      };
-    } catch (error) {
-      console.error('Error formatting NFT:', error);
-      return null;
-    }
-  }
