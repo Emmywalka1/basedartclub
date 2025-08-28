@@ -1,7 +1,7 @@
 // app/api/process-wallet/route.ts
 // Dynamic wallet processor with multiple fallback methods
 import { NextRequest, NextResponse } from 'next/server';
-import { KVStorage } from '../../../lib/kv-storage';
+import { RedisStorage } from '../../../lib/kv-storage';
 import axios from 'axios';
 
 const ALCHEMY_API_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY || 'VC101OeDXt98wh97JznfZ7KCbaglnN-G';
