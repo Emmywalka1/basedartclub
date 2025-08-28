@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     
     // If we found contracts, add them to KV
     if (contracts.length > 0) {
-      const { added, existing } = await KVStorage.addMultipleContracts(
+      const { added, existing } = await RedisStorage.addMultipleContracts(
         contracts,
         {
           name: name || `Wallet ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`,
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
         newContracts: added.length,
         existingContracts: existing.length,
         contracts: contracts.slice(0, 10), // Return first 10 as preview
-        totalContracts: await KVStorage.getContractCount(),
+        totalContracts: await RedisStorage.getContractCount(),
       });
     }
     
