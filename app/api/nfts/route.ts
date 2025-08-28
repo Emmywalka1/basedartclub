@@ -128,8 +128,8 @@ export async function GET(request: NextRequest) {
         // Clear response cache to force refresh
         responseCache.clear();
 
-        const totalContracts = await KVStorage.getContractCount();
-        const allContracts = await KVStorage.getAllContracts();
+        const totalContracts = await RedisStorage.getContractCount();
+        const allContracts = await RedisStorage.getAllContracts();
 
         console.log(`✅ Contract ${result.isNew ? 'added' : 'already exists'}: ${contractAddress}`);
 
@@ -153,12 +153,12 @@ export async function GET(request: NextRequest) {
           );
         }
 
-        const wasRemoved = await KVStorage.removeContract(removeAddress);
+        const wasRemoved = await RedisStorage.removeContract(removeAddress);
         
         // Clear response cache
         responseCache.clear();
 
-        const totalContracts = await KVStorage.getContractCount();
+        const totalContracts = await RedisStorage.getContractCount();
 
         return NextResponse.json({
           success: true,
@@ -170,9 +170,9 @@ export async function GET(request: NextRequest) {
       }
 
       case 'list-contracts': {
-        const contracts = await KVStorage.getAllContracts();
-        const contractDetails = await KVStorage.getAllContractDetails();
-        const stats = await KVStorage.getStats();
+        const contracts = await RedisStorage.getAllContracts();
+        const contractDetails = await RedisStorage.getAllContractDetails();
+        const stats = await RedisStorage.getStats();
         
         return NextResponse.json({
           success: true,
@@ -212,7 +212,7 @@ export async function GET(request: NextRequest) {
         
         if (contractsArray.length > 0) {
           // Add all contracts to KV storage
-          const { added, existing } = await KVStorage.addMultipleContracts(
+          const { added, existing } = await RedisStorage.addMultipleContracts(
             contractsArray,
             {
               name: walletName || `Contracts from ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`,
@@ -228,7 +228,7 @@ export async function GET(request: NextRequest) {
           responseCache.clear();
         }
         
-        const totalContracts = await KVStorage.getContractCount();
+        const totalContracts = await RedisStorage.getContractCount();
         
         return NextResponse.json({
           success: true,
@@ -252,7 +252,7 @@ export async function GET(request: NextRequest) {
           );
         }
 
-        const results = await KVStorage.searchContracts(query);
+        const results = await RedisStorage.searchContracts(query);
         
         return NextResponse.json({
           success: true,
@@ -262,8 +262,8 @@ export async function GET(request: NextRequest) {
       }
 
       case 'stats': {
-        const stats = await KVStorage.getStats();
-        const contractCount = await KVStorage.getContractCount();
+        const stats = await RedisStorage.getStats();
+        const contractCount = await RedisStorage.getContractCount();
         
         return NextResponse.json({
           success: true,
