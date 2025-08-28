@@ -1,7 +1,7 @@
 // app/api/nfts/route.ts - With Vercel KV Redis integration
 import { NextRequest, NextResponse } from 'next/server';
 import { NFTService } from '../../../services/nftService';
-import { KVStorage } from '../../../lib/kv-storage';
+import { RedisStorage } from '../../../lib/kv-storage';
 
 // Simple response cache (in-memory for API responses)
 const CACHE_DURATION = 300; // 5 minutes
