@@ -32,10 +32,10 @@ export async function GET(request: NextRequest) {
     switch (action) {
       case 'curated':
       case 'discover': {
-        // Get all contracts from KV storage
-        const contracts = await KVStorage.getAllContracts();
+        // Get all contracts from Redis storage
+        const contracts = await RedisStorage.getAllContracts();
         
-        console.log(`📝 Loading NFTs from ${contracts.length} contracts in KV storage`);
+        console.log(`📝 Loading NFTs from ${contracts.length} contracts in redis storage`);
         
         if (contracts.length === 0) {
           return NextResponse.json({
